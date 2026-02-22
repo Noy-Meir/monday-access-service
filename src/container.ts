@@ -6,6 +6,7 @@
  */
 import { InMemoryAccessRequestRepository } from './repositories/InMemoryAccessRequestRepository';
 import { AuthService } from './services/AuthService';
+import { AuthorizationService } from './services/AuthorizationService';
 import { AccessRequestService } from './services/AccessRequestService';
 import { AccessRequestController } from './controllers/AccessRequestController';
 import { AuthController } from './controllers/AuthController';
@@ -16,7 +17,8 @@ const accessRequestRepository = new InMemoryAccessRequestRepository();
 // ── Services ──────────────────────────────────────────────────────────────────
 // AuthService owns the user Map; seedData() populates it via registerUser().
 const authService = new AuthService(new Map());
-const accessRequestService = new AccessRequestService(accessRequestRepository);
+const authorizationService = new AuthorizationService();
+const accessRequestService = new AccessRequestService(accessRequestRepository, authorizationService);
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 const accessRequestController = new AccessRequestController(accessRequestService);
@@ -25,6 +27,7 @@ const authController = new AuthController(authService);
 export const container = {
   accessRequestRepository,
   authService,
+  authorizationService,
   accessRequestService,
   accessRequestController,
   authController,
