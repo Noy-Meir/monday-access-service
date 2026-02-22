@@ -233,11 +233,11 @@ Content-Type: application/json
 
 ###
 
-### [E5] FORBIDDEN — Employee attempts to approve a request (role guard)
-# The PATCH /decision endpoint is restricted to APPROVERs only.
+### [E5] FORBIDDEN — Employee attempts to approve a request (permission guard)
+# The PATCH /decision endpoint requires the access_request:decide permission.
 # An EMPLOYEE token hits the authorize middleware and is rejected before
 # reaching the service layer.
-# Expected: 403 { "error": { "message": "Role 'EMPLOYEE' is not authorized..." } }
+# Expected: 403 { "error": { "message": "Access denied: role 'EMPLOYEE' does not have permission 'access_request:decide'" } }
 PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
@@ -250,16 +250,16 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [E6] FORBIDDEN — Employee attempts to list all requests
-# GET /api/access-requests (no filters) is APPROVER only.
-# Expected: 403 { "error": { "message": "Only APPROVERs can list all access requests" } }
+# GET /api/access-requests requires the access_request:view:all permission.
+# Expected: 403 { "error": { "message": "Access denied: role 'EMPLOYEE' does not have permission 'access_request:view:all'" } }
 GET {{baseUrl}}/api/access-requests
 Authorization: Bearer {{auth_token}}
 
 ###
 
 ### [E7] FORBIDDEN — Employee attempts to view another user's requests
-# Employees are blocked from querying requests that belong to a different userId.
-# Expected: 403 { "error": { "message": "Employees can only view their own access requests" } }
+# Employees lack access_request:view:all, so the service rejects cross-user queries.
+# Expected: 403 { "error": { "message": "You can only view your own access requests" } }
 GET {{baseUrl}}/api/access-requests/user/user-bob-002
 Authorization: Bearer {{auth_token}}
 
