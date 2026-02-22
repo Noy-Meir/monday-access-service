@@ -64,7 +64,7 @@ export class AccessRequestController {
 
   getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.service.getById(req.params.createdBy, req.user!);
+      const result = await this.service.getById(req.params.id, req.user!);
       res.json({ data: result });
     } catch (err) {
       next(err);

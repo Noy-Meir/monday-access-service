@@ -103,7 +103,7 @@ export class AccessRequestService {
       throw new AppError('Request not found', 404);
     }
 
-    if (actor.role !== 'APPROVER' && request.id !== actor.sub) {
+    if (actor.role !== Role.APPROVER && request.createdBy !== actor.sub) {
       throw new AppError('Not authorized to view this request', 403);
     }
 
