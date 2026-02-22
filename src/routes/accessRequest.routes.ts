@@ -6,7 +6,7 @@ import { createAuthorizeMiddleware } from '../middleware/authorize.middleware';
 import { createValidateMiddleware } from '../middleware/validate.middleware';
 import { createAccessRequestSchema } from '../validators/createAccessRequest.schema';
 import { decideAccessRequestSchema } from '../validators/decideAccessRequest.schema';
-import { Role } from '../models/AccessRequest';
+import { Permission } from '../models/Permission';
 
 export function createAccessRequestRouter(
   controller: AccessRequestController,
@@ -25,30 +25,34 @@ export function createAccessRequestRouter(
     controller.create
   );
 
-  // APPROVER only: approve or deny a PENDING request
+  // Requires ACCESS_REQUEST_DECIDE — approve or deny a PENDING request
   router.patch(
     '/:id/decision',
-    createAuthorizeMiddleware([Role.APPROVER]),
+    createAuthorizeMiddleware(Permission.ACCESS_REQUEST_DECIDE),
     createValidateMiddleware(decideAccessRequestSchema),
     controller.decide
   );
 
-  // Get requests for a specific user (employees: own only, approvers: any)
+  // Get requests for a specific user (service enforces own-only for employees)
   router.get('/user/:userId', controller.getByUser);
 
-  // APPROVER only: filter all requests by status
+  // Requires ACCESS_REQUEST_VIEW_BY_STATUS — filter all requests by status
   router.get(
     '/status/:status',
-    createAuthorizeMiddleware([Role.APPROVER]),
+    createAuthorizeMiddleware(Permission.ACCESS_REQUEST_VIEW_BY_STATUS),
     controller.getByStatus
   );
 
-  // APPROVER only: list all requests
+  // Requires ACCESS_REQUEST_VIEW_ALL — list every request in the system
   router.get(
     '/',
-    createAuthorizeMiddleware([Role.APPROVER]),
+    createAuthorizeMiddleware(Permission.ACCESS_REQUEST_VIEW_ALL),
     controller.getAll
   );
+
+  // Get a single request by ID — must be registered last to avoid shadowing
+  // the more specific /user/:userId and /status/:status routes above
+  router.get('/:id', controller.getById);
 
   return router;
 }

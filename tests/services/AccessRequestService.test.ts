@@ -1,7 +1,9 @@
 import { AccessRequestService } from '../../src/services/AccessRequestService';
+import { AuthorizationService } from '../../src/services/AuthorizationService';
 import { IAccessRequestRepository } from '../../src/repositories/IAccessRequestRepository';
 import { AppError } from '../../src/utils/AppError';
 import { RequestStatus, Role } from '../../src/models/AccessRequest';
+import { Permission } from '../../src/models/Permission';
 import {
   mockEmployeePayload,
   mockApproverPayload,
@@ -35,7 +37,9 @@ describe('AccessRequestService', () => {
 
   beforeEach(() => {
     repository = buildMockRepository();
-    service = new AccessRequestService(repository);
+    // Use a real AuthorizationService — it is stateless and has no external deps.
+    // This exercises the full permission matrix rather than hiding it behind a mock.
+    service = new AccessRequestService(repository, new AuthorizationService());
   });
 
   // ── create ─────────────────────────────────────────────────────────────────
@@ -186,7 +190,12 @@ describe('AccessRequestService', () => {
     it('throws AppError 403 when an EMPLOYEE calls decide', async () => {
       await expect(
         service.decide(mockPendingRequest.id, { decision: RequestStatus.APPROVED }, mockEmployeePayload)
-      ).rejects.toThrow(new AppError('Only APPROVERs can make decisions on requests', 403));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: 403,
+          message: `Access denied: role '${Role.EMPLOYEE}' does not have permission '${Permission.ACCESS_REQUEST_DECIDE}'`,
+        })
+      );
     });
 
     it('throws AppError 404 when the request does not exist', async () => {
@@ -237,7 +246,12 @@ describe('AccessRequestService', () => {
     it('throws AppError 403 when an EMPLOYEE tries to view another user\'s requests', async () => {
       await expect(
         service.getByUser('other-user-id', mockEmployeePayload)
-      ).rejects.toThrow(new AppError('Employees can only view their own access requests', 403));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: 403,
+          message: 'You can only view your own access requests',
+        })
+      );
     });
 
     it('does not call the repository when the EMPLOYEE is blocked by the 403 guard', async () => {
@@ -277,7 +291,12 @@ describe('AccessRequestService', () => {
     it('throws AppError 403 when an EMPLOYEE calls getByStatus', async () => {
       await expect(
         service.getByStatus(RequestStatus.PENDING, mockEmployeePayload)
-      ).rejects.toThrow(new AppError('Only APPROVERs can filter requests by status', 403));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: 403,
+          message: `Access denied: role '${Role.EMPLOYEE}' does not have permission '${Permission.ACCESS_REQUEST_VIEW_BY_STATUS}'`,
+        })
+      );
     });
 
     it('does not call the repository when the EMPLOYEE is blocked', async () => {
@@ -317,7 +336,10 @@ describe('AccessRequestService', () => {
 
     it('throws AppError 403 when an EMPLOYEE calls getAll', async () => {
       await expect(service.getAll(mockEmployeePayload)).rejects.toThrow(
-        new AppError('Only APPROVERs can list all access requests', 403)
+        expect.objectContaining({
+          statusCode: 403,
+          message: `Access denied: role '${Role.EMPLOYEE}' does not have permission '${Permission.ACCESS_REQUEST_VIEW_ALL}'`,
+        })
       );
     });
 

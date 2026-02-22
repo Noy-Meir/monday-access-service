@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AccessRequestService } from '../services/AccessRequestService';
-import { RequestStatus } from '../models/AccessRequest';
+import {RequestStatus} from '../models/AccessRequest';
 import { AppError } from '../utils/AppError';
 
 export class AccessRequestController {
@@ -33,6 +33,7 @@ export class AccessRequestController {
     }
   };
 
+
   getByStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { status } = req.params;
@@ -55,6 +56,15 @@ export class AccessRequestController {
   getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await this.service.getAll(req.user!);
+      res.json({ data: result });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.service.getById(req.params.id, req.user!);
       res.json({ data: result });
     } catch (err) {
       next(err);
