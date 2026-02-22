@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
-import { AccessRequest, RequestStatus, Role, TokenPayload } from '../models/AccessRequest';
+import { AccessRequest, RequestStatus, TokenPayload } from '../models/AccessRequest';
+import { Permission } from '../models/Permission';
 import { IAccessRequestRepository } from '../repositories/IAccessRequestRepository';
+import { AuthorizationService } from './AuthorizationService';
 import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
 
@@ -15,7 +17,10 @@ export interface DecideAccessRequestInput {
 }
 
 export class AccessRequestService {
-  constructor(private readonly repository: IAccessRequestRepository) {}
+  constructor(
+    private readonly repository: IAccessRequestRepository,
+    private readonly authz: AuthorizationService
+  ) {}
 
   async create(input: CreateAccessRequestInput, actor: TokenPayload): Promise<AccessRequest> {
     const request: AccessRequest = {
@@ -38,9 +43,7 @@ export class AccessRequestService {
     input: DecideAccessRequestInput,
     actor: TokenPayload
   ): Promise<AccessRequest> {
-    if (actor.role !== Role.APPROVER) {
-      throw new AppError('Only APPROVERs can make decisions on requests', 403);
-    }
+    this.authz.assertPermission(actor, Permission.ACCESS_REQUEST_DECIDE);
 
     const request = await this.repository.findById(requestId);
     if (!request) {
@@ -75,24 +78,35 @@ export class AccessRequestService {
   }
 
   async getByUser(userId: string, actor: TokenPayload): Promise<AccessRequest[]> {
-    // Employees can only retrieve their own requests; approvers can retrieve any user's.
-    if (actor.role === Role.EMPLOYEE && actor.sub !== userId) {
-      throw new AppError('Employees can only view their own access requests', 403);
+    // Actors without VIEW_ALL can only query their own requests.
+    if (!this.authz.hasPermission(actor, Permission.ACCESS_REQUEST_VIEW_ALL) && actor.sub !== userId) {
+      throw new AppError('You can only view your own access requests', 403);
     }
     return this.repository.findByUserId(userId);
   }
 
   async getByStatus(status: RequestStatus, actor: TokenPayload): Promise<AccessRequest[]> {
-    if (actor.role !== Role.APPROVER) {
-      throw new AppError('Only APPROVERs can filter requests by status', 403);
-    }
+    this.authz.assertPermission(actor, Permission.ACCESS_REQUEST_VIEW_BY_STATUS);
     return this.repository.findByStatus(status);
   }
 
   async getAll(actor: TokenPayload): Promise<AccessRequest[]> {
-    if (actor.role !== Role.APPROVER) {
-      throw new AppError('Only APPROVERs can list all access requests', 403);
-    }
+    this.authz.assertPermission(actor, Permission.ACCESS_REQUEST_VIEW_ALL);
     return this.repository.findAll();
+  }
+
+  async getById(id: string, actor: TokenPayload): Promise<AccessRequest> {
+    const request = await this.repository.findById(id);
+
+    if (!request) {
+      throw new AppError('Request not found', 404);
+    }
+
+    // Actors without VIEW_ALL can only see their own requests.
+    if (!this.authz.hasPermission(actor, Permission.ACCESS_REQUEST_VIEW_ALL) && request.createdBy !== actor.sub) {
+      throw new AppError('Not authorized to view this request', 403);
+    }
+
+    return request;
   }
 }

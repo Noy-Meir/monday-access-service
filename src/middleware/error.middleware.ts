@@ -14,19 +14,22 @@ export function errorMiddleware(
   // Express requires the 4-parameter signature for error handlers even if _next is unused.
   _next: NextFunction
 ): void {
-  if (err instanceof AppError) {
+  const isAppError = err instanceof AppError || (err as AppError).isOperational === true;
+
+  if (isAppError) {
+    const appErr = err as AppError;
     logger.warn('Operational error', {
-      statusCode: err.statusCode,
-      message: err.message,
-      details: err.details,
+      statusCode: appErr.statusCode,
+      message: appErr.message,
+      details: appErr.details,
       path: req.path,
       method: req.method,
     });
 
-    res.status(err.statusCode).json({
+    res.status(appErr.statusCode).json({
       error: {
-        message: err.message,
-        ...(err.details !== undefined ? { details: err.details } : {}),
+        message: appErr.message,
+        ...(appErr.details !== undefined ? { details: appErr.details } : {}),
       },
     });
     return;
