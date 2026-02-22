@@ -95,4 +95,18 @@ export class AccessRequestService {
     }
     return this.repository.findAll();
   }
+
+  async getById(id: string, actor: TokenPayload): Promise<AccessRequest> {
+    const request = await this.repository.findById(id);
+
+    if (!request) {
+      throw new AppError('Request not found', 404);
+    }
+
+    if (actor.role !== 'APPROVER' && request.id !== actor.sub) {
+      throw new AppError('Not authorized to view this request', 403);
+    }
+
+    return request;
+  }
 }

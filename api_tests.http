@@ -20,7 +20,7 @@
 
 # After running "Create Access Request", paste the returned `id` here
 # so the decide/fetch-by-id requests below can reuse it without copy-pasting.
-@request_id = PASTE_REQUEST_ID_HERE
+@request_id = cc264f79-cd97-4178-a718-4fe832335b5f
 
 
 # =============================================================================
@@ -87,7 +87,7 @@ Authorization: Bearer {{auth_token}}
 ### [4] Get a Specific Request by ID (Employee — own request)
 # Fetches the request created in step [2] using the captured @request_id.
 # Expected: 200 { "data": { "id": "...", "status": "PENDING", ... } }
-GET {{baseUrl}}/api/access-requests/user/user-alice-001
+GET {{baseUrl}}/api/access-requests/{{request_id}}
 Authorization: Bearer {{auth_token}}
 
 

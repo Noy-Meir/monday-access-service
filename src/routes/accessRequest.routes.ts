@@ -18,6 +18,8 @@ export function createAccessRequestRouter(
   // All routes in this router require a valid JWT
   router.use(authenticate);
 
+  router.get('/:id', controller.getById);
+
   // Any authenticated user can submit a request
   router.post(
     '/',
