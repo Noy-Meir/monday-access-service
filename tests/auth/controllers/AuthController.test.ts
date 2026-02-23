@@ -1,10 +1,10 @@
-import { AuthController } from '../../src/controllers/AuthController';
-import { AuthService } from '../../src/services/AuthService';
-import { AppError } from '../../src/utils/AppError';
-import { mockUser } from '../helpers/fixtures';
-import { createMockNext, createMockRequest, createMockResponse } from '../helpers/mockExpress';
+import { AuthController } from '../../../src/modules/auth/controllers/AuthController';
+import { AuthService } from '../../../src/modules/auth/services/AuthService';
+import { AppError } from '../../../src/utils/AppError';
+import { mockUser } from '../../helpers/fixtures';
+import { createMockNext, createMockRequest, createMockResponse } from '../../helpers/mockExpress';
 
-jest.mock('../../src/utils/logger', () => ({
+jest.mock('../../../src/utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 

@@ -1,6 +1,6 @@
-import { TokenPayload } from '../models/AccessRequest';
-import { Permission, ROLE_PERMISSIONS } from '../models/Permission';
-import { AppError } from '../utils/AppError';
+import { TokenPayload } from '../../../models/AccessRequest';
+import { Permission, ROLE_PERMISSIONS } from '../../../models/Permission';
+import { AppError } from '../../../utils/AppError';
 
 /**
  * Centralised authorization service.

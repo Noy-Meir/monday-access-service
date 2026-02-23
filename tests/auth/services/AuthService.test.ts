@@ -1,7 +1,7 @@
-import { AuthService } from '../../src/services/AuthService';
-import { AppError } from '../../src/utils/AppError';
-import { Role, User } from '../../src/models/AccessRequest';
-import { mockUser } from '../helpers/fixtures';
+import { AuthService } from '../../../src/modules/auth/services/AuthService';
+import { AppError } from '../../../src/utils/AppError';
+import { Role, User } from '../../../src/models/AccessRequest';
+import { mockUser } from '../../helpers/fixtures';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 jest.mock('bcryptjs', () => ({
@@ -14,7 +14,7 @@ jest.mock('jsonwebtoken', () => ({
   verify: jest.fn(),
 }));
 
-jest.mock('../../src/utils/logger', () => ({
+jest.mock('../../../src/utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 

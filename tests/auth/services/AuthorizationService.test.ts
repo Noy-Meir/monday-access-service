@@ -1,7 +1,7 @@
-import { AuthorizationService } from '../../src/services/AuthorizationService';
-import { Permission } from '../../src/models/Permission';
-import { Role } from '../../src/models/AccessRequest';
-import { mockEmployeePayload, mockApproverPayload } from '../helpers/fixtures';
+import { AuthorizationService } from '../../../src/modules/auth/services/AuthorizationService';
+import { Permission } from '../../../src/models/Permission';
+import { Role } from '../../../src/models/AccessRequest';
+import { mockEmployeePayload, mockApproverPayload } from '../../helpers/fixtures';
 
 describe('AuthorizationService', () => {
   let authz: AuthorizationService;
