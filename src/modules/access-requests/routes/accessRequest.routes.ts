@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { AccessRequestController } from '../controllers/AccessRequestController';
-import { RiskAssessmentController } from '../controllers/RiskAssessmentController';
-import { AuthService } from '../services/AuthService';
-import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
-import { createAuthorizeMiddleware } from '../middleware/authorize.middleware';
-import { createValidateMiddleware } from '../middleware/validate.middleware';
-import { createRequestRateLimiter } from '../middleware/rateLimiter.middleware';
+import { RiskAssessmentController } from '../../ai-agent/controllers/RiskAssessmentController';
+import { AuthService } from '../../auth/services/AuthService';
+import { createAuthenticateMiddleware } from '../../../middleware/authenticate.middleware';
+import { createAuthorizeMiddleware } from '../../../middleware/authorize.middleware';
+import { createValidateMiddleware } from '../../../middleware/validate.middleware';
+import { createRequestRateLimiter } from '../../../middleware/rateLimiter.middleware';
 import { createAccessRequestSchema } from '../validators/createAccessRequest.schema';
 import { decideAccessRequestSchema } from '../validators/decideAccessRequest.schema';
-import { Permission } from '../models/Permission';
+import { Permission } from '../../../models/Permission';
 
 export function createAccessRequestRouter(
   controller: AccessRequestController,

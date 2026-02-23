@@ -1,8 +1,8 @@
 
-import { AccessRequestController } from '../../src/controllers/AccessRequestController';
-import { AccessRequestService } from '../../src/services/AccessRequestService';
-import { AppError } from '../../src/utils/AppError';
-import { RequestStatus } from '../../src/models/AccessRequest';
+import { AccessRequestController } from '../../../src/modules/access-requests/controllers/AccessRequestController';
+import { AccessRequestService } from '../../../src/modules/access-requests/services/AccessRequestService';
+import { AppError } from '../../../src/utils/AppError';
+import { RequestStatus } from '../../../src/models/AccessRequest';
 // @ts-ignore
 import {
   mockEmployeePayload,
@@ -10,10 +10,10 @@ import {
   mockPendingRequest,
   mockApprovedRequest,
   mockDeniedRequest,
-} from '../helpers/fixtures';
-import { createMockNext, createMockRequest, createMockResponse } from '../helpers/mockExpress';
+} from '../../helpers/fixtures';
+import { createMockNext, createMockRequest, createMockResponse } from '../../helpers/mockExpress';
 
-jest.mock('../../src/utils/logger', () => ({
+jest.mock('../../../src/utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 

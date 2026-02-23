@@ -1,21 +1,21 @@
-import { AccessRequestService } from '../../src/services/AccessRequestService';
-import { AuthorizationService } from '../../src/services/AuthorizationService';
-import { IAccessRequestRepository } from '../../src/repositories/IAccessRequestRepository';
-import { AppError } from '../../src/utils/AppError';
-import { RequestStatus, Role } from '../../src/models/AccessRequest';
-import { Permission } from '../../src/models/Permission';
+import { AccessRequestService } from '../../../src/modules/access-requests/services/AccessRequestService';
+import { AuthorizationService } from '../../../src/modules/auth/services/AuthorizationService';
+import { IAccessRequestRepository } from '../../../src/modules/access-requests/repositories/IAccessRequestRepository';
+import { AppError } from '../../../src/utils/AppError';
+import { RequestStatus, Role } from '../../../src/models/AccessRequest';
+import { Permission } from '../../../src/models/Permission';
 import {
   mockEmployeePayload,
   mockApproverPayload,
   mockPendingRequest,
   mockApprovedRequest,
   mockDeniedRequest,
-} from '../helpers/fixtures';
+} from '../../helpers/fixtures';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 jest.mock('uuid', () => ({ v4: jest.fn().mockReturnValue('generated-uuid') }));
 
-jest.mock('../../src/utils/logger', () => ({
+jest.mock('../../../src/utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 
