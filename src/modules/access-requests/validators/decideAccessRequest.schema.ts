@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RequestStatus } from '../models/AccessRequest';
+import { RequestStatus } from '../../../models/AccessRequest';
 
 export const decideAccessRequestSchema = z.object({
   decision: z.enum([RequestStatus.APPROVED, RequestStatus.DENIED], {

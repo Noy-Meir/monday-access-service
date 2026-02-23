@@ -1,5 +1,5 @@
-import { MockAiProvider } from '../../src/ai/providers/MockAiProvider';
-import { RiskAssessmentInput } from '../../src/ai/types';
+import { MockAiProvider } from '../../src/modules/ai-agent/providers/MockAiProvider';
+import { RiskAssessmentInput } from '../../src/modules/ai-agent/types';
 
 function makeInput(applicationName: string, justification: string): RiskAssessmentInput {
   return {

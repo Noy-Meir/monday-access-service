@@ -1,5 +1,5 @@
-import { AccessRequest } from '../../models/AccessRequest';
-import { logger } from '../../utils/logger';
+import { AccessRequest } from '../../../models/AccessRequest';
+import { logger } from '../../../utils/logger';
 import { IAiProvider } from '../providers/IAiProvider';
 import { IRiskAssessmentAgent } from './IRiskAssessmentAgent';
 import { RiskAssessmentResult, toRiskAssessmentInput } from '../types';

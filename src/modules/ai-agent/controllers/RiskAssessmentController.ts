@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { AccessRequestService } from '../services/AccessRequestService';
-import { IRiskAssessmentAgent } from '../ai/agent/IRiskAssessmentAgent';
+import { AccessRequestService } from '../../access-requests/services/AccessRequestService';
+import { IRiskAssessmentAgent } from '../agent/IRiskAssessmentAgent';
 
 export class RiskAssessmentController {
   constructor(

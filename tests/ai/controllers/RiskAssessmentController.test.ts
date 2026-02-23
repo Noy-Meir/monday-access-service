@@ -1,16 +1,16 @@
-import { RiskAssessmentController } from '../../src/controllers/RiskAssessmentController';
-import { AccessRequestService } from '../../src/services/AccessRequestService';
-import { IRiskAssessmentAgent } from '../../src/ai/agent/IRiskAssessmentAgent';
-import { RiskAssessmentResult } from '../../src/ai/types';
-import { AppError } from '../../src/utils/AppError';
+import { RiskAssessmentController } from '../../../src/modules/ai-agent/controllers/RiskAssessmentController';
+import { AccessRequestService } from '../../../src/modules/access-requests/services/AccessRequestService';
+import { IRiskAssessmentAgent } from '../../../src/modules/ai-agent/agent/IRiskAssessmentAgent';
+import { RiskAssessmentResult } from '../../../src/modules/ai-agent/types';
+import { AppError } from '../../../src/utils/AppError';
 import {
   mockEmployeePayload,
   mockApproverPayload,
   mockPendingRequest,
-} from '../helpers/fixtures';
-import { createMockNext, createMockRequest, createMockResponse } from '../helpers/mockExpress';
+} from '../../helpers/fixtures';
+import { createMockNext, createMockRequest, createMockResponse } from '../../helpers/mockExpress';
 
-jest.mock('../../src/utils/logger', () => ({
+jest.mock('../../../src/utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 

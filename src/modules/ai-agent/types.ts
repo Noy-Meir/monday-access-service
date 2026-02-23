@@ -1,4 +1,4 @@
-import { AccessRequest } from '../models/AccessRequest';
+import { AccessRequest } from '../../models/AccessRequest';
 
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 

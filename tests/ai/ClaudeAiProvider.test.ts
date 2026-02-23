@@ -1,5 +1,5 @@
 import { AppError } from '../../src/utils/AppError';
-import { RiskAssessmentInput } from '../../src/ai/types';
+import { RiskAssessmentInput } from '../../src/modules/ai-agent/types';
 
 // ── Mock @anthropic-ai/sdk ────────────────────────────────────────────────────
 jest.mock('@anthropic-ai/sdk', () => ({
@@ -19,7 +19,7 @@ jest.mock('../../src/config', () => ({
 }));
 
 import Anthropic from '@anthropic-ai/sdk';
-import { ClaudeAiProvider } from '../../src/ai/providers/ClaudeAiProvider';
+import { ClaudeAiProvider } from '../../src/modules/ai-agent/providers/ClaudeAiProvider';
 
 const baseInput: RiskAssessmentInput = {
   requestId: 'req-001',

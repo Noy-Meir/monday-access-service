@@ -1,4 +1,4 @@
-import { AccessRequest } from '../../models/AccessRequest';
+import { AccessRequest } from '../../../models/AccessRequest';
 import { RiskAssessmentResult } from '../types';
 
 export interface IRiskAssessmentAgent {

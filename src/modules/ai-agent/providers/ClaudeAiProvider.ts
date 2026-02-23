@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { config } from '../../config';
-import { AppError } from '../../utils/AppError';
+import { config } from '../../../config';
+import { AppError } from '../../../utils/AppError';
 import { IAiProvider } from './IAiProvider';
 import { RiskAssessmentInput, ProviderResult, RiskLevel } from '../types';
 
