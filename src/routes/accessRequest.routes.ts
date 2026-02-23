@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AccessRequestController } from '../controllers/AccessRequestController';
+import { RiskAssessmentController } from '../controllers/RiskAssessmentController';
 import { AuthService } from '../services/AuthService';
 import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
 import { createAuthorizeMiddleware } from '../middleware/authorize.middleware';
@@ -11,7 +12,8 @@ import { Permission } from '../models/Permission';
 
 export function createAccessRequestRouter(
   controller: AccessRequestController,
-  authService: AuthService
+  authService: AuthService,
+  riskController: RiskAssessmentController
 ): Router {
   const router = Router();
   const authenticate = createAuthenticateMiddleware(authService);
@@ -26,6 +28,9 @@ export function createAccessRequestRouter(
     createValidateMiddleware(createAccessRequestSchema),
     controller.create
   );
+
+  // Risk assessment — registered before GET /:id to avoid route shadowing
+  router.post('/:id/risk-assessment', riskController.assess);
 
   // Requires ACCESS_REQUEST_DECIDE — approve or deny a PENDING request
   router.patch(
