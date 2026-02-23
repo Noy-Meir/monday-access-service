@@ -6,38 +6,42 @@ Employees submit requests; approvers approve or deny them. An AI agent performs 
 ---
 
 ## Architecture
-
-```mermaid
-graph TD
-    Client -->|HTTPS JSON| RateLimit["Rate Limiter\n(express-rate-limit)"]
-    RateLimit --> Helmet["Security Headers\n(Helmet)"]
-    Helmet --> Express
-
-    Express --> HealthCheck["GET /health (no auth)"]
-    Express --> AuthRouter["POST /api/auth/login\n(authRateLimiter)"]
-    Express --> AccessRouter["/api/access-requests\n(authenticate middleware)"]
-
-    AuthRouter --> AuthController
-    AuthController --> AuthService["AuthService\n(modules/auth)"]
-    AuthService -->|sign / verify| JWT
-    AuthService --> UserMap[(User Map)]
-    UserMap -->|populated at startup| SeedData
-
-    AccessRouter --> AccessController["AccessRequestController\n(modules/access-requests)"]
-    AccessRouter --> RiskController["RiskAssessmentController\n(modules/ai-agent)"]
-
-    AccessController --> AccessRequestService["AccessRequestService"]
-    AccessRequestService --> AuthorizationService["AuthorizationService\n(ROLE_PERMISSIONS matrix)"]
-    AccessRequestService --> IRepo["IAccessRequestRepository"]
-    IRepo -.->|implements| InMemoryRepo[(In-Memory Map)]
-
-    RiskController --> AccessRequestService
-    RiskController --> Agent["RiskAssessmentAgent"]
-    Agent --> IAiProvider["IAiProvider"]
-    IAiProvider -.->|AI_PROVIDER=mock| MockProvider["MockAiProvider\n(rule-based scoring)"]
-    IAiProvider -.->|AI_PROVIDER=claude| ClaudeProvider["ClaudeAiProvider\n(Anthropic API)"]
-
-    Express --> ErrorMiddleware["Global Error Middleware\n(last handler)"]
+```text
+                                  ┌────────────────────────┐
+                                  │      HTTP CLIENT       │
+                                  └───────────┬────────────┘
+                                              │ HTTPS JSON
+    ┌─────────────────────────────────────────▼────────────────────────────────────────┐
+    │                            ENTRY POINT & SECURITY                                │
+    │  ┌────────────────┐      ┌────────────────────┐      ┌────────────────────────┐  │
+    │  │  Rate Limiter  │─────▶│  Security Headers  │─────▶│    Express Router      │  │
+    │  └────────────────┘      └────────────────────┘      └──────────┬─────────────┘  │
+    └─────────────────────────────────────────────────────────────────│────────────────┘
+                                                                      │
+                ┌──────────────────────────────┬──────────────────────┴─────────────┐
+                ▼                              ▼                                    ▼
+    ┌───────────────────────┐      ┌───────────────────────┐            ┌───────────────────────┐
+    │     HEALTH CHECK      │      │     AUTH MODULE       │            │ ACCESS REQUEST MODULE │
+    │     (GET /health)     │      │ (POST /api/auth/login)│            │  (/api/access-requests)│
+    └───────────────────────┘      └───────────┬───────────┘            └───────────┬───────────┘
+                                               │                                    │
+                                   ┌───────────▼───────────┐            ┌───────────▼───────────┐
+                                   │     AuthService       │            │ AccessRequestService  │
+                                   │ (JWT / User Map)      │◀──────────▶│ (Business Logic)      │
+                                   └───────────┬───────────┘            └───────────┬───────────┘
+                                               │                                    │
+                                     ┌─────────▼────────┐               ┌───────────▼───────────┐
+                                     │    Seed Data     │               │ Risk Assessment Agent │
+                                     └──────────────────┘               │ (Claude / Mock LLM)   │
+                                                                        └───────────┬───────────┘
+                                                                                    │
+                                                                        ┌───────────▼───────────┐
+                                                                        │  In-Memory Repository │
+                                                                        │  (State Persistence)  │
+                                                                        └───────────────────────┘
+    ┌──────────────────────────────────────────────────────────────────────────────────────────┐
+    │                            GLOBAL ERROR HANDLING MIDDLEWARE                              │
+    └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
