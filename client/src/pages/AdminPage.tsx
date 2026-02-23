@@ -9,17 +9,17 @@ import type { AccessRequest } from '../types';
 type Filter = 'ALL' | RequestStatus;
 
 const filters: { value: Filter; label: string }[] = [
-  { value: 'ALL', label: 'All' },
   { value: RequestStatus.PENDING, label: 'Pending' },
   { value: RequestStatus.APPROVED, label: 'Approved' },
   { value: RequestStatus.DENIED, label: 'Denied' },
+  { value: 'ALL', label: 'All' },
 ];
 
 export function AdminPage() {
   const { showToast } = useToast();
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<Filter>('ALL');
+  const [activeFilter, setActiveFilter] = useState<Filter>(RequestStatus.PENDING);
 
   const fetchRequests = useCallback(async () => {
     setIsLoading(true);

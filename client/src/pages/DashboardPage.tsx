@@ -48,10 +48,7 @@ export function DashboardPage() {
       )}
 
       {/* Request list */}
-      <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">My Requests</h2>
-        <RequestList newRequest={newRequest} />
-      </div>
+      <RequestList newRequest={newRequest} />
     </div>
   );
 }
