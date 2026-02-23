@@ -2,13 +2,17 @@
 
 export enum Role {
   EMPLOYEE = 'EMPLOYEE',
-  APPROVER = 'APPROVER',
+  MANAGER  = 'MANAGER',
+  IT       = 'IT',
+  HR       = 'HR',
+  ADMIN    = 'ADMIN',
 }
 
 export enum RequestStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  DENIED = 'DENIED',
+  PENDING             = 'PENDING',
+  PARTIALLY_APPROVED  = 'PARTIALLY_APPROVED',
+  APPROVED            = 'APPROVED',
+  DENIED              = 'DENIED',
 }
 
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -22,11 +26,20 @@ export interface User {
   role: Role;
 }
 
+export interface Approval {
+  role: Role;
+  approvedBy: string;
+  approvedByEmail: string;
+  approvedAt: string; // ISO string
+}
+
 export interface AccessRequest {
   id: string;
   applicationName: string;
   justification: string;
   status: RequestStatus;
+  requiredApprovals: Role[];
+  approvals: Approval[];
   createdBy: string;
   createdByEmail: string;
   createdAt: string; // ISO string

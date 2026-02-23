@@ -14,6 +14,8 @@ const mockRequest: AccessRequest = {
   applicationName: 'Salesforce CRM',
   justification: 'Need access to manage enterprise accounts for the Q3 sales cycle.',
   status: RequestStatus.PENDING,
+  requiredApprovals: [],
+  approvals: [],
   createdBy: 'user-alice-001',
   createdByEmail: 'alice@company.com',
   createdAt: new Date('2024-01-01T10:00:00Z'),

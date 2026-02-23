@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { requestsService } from '../../services/requests.service';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth';
 import { extractMessage, timeAgo } from '../../utils/errorMessages';
 import { StatusBadge } from '../requests/StatusBadge';
 import { RiskBadge, RiskPanel } from './RiskBadge';
@@ -8,7 +9,7 @@ import { DecisionModal } from './DecisionModal';
 import { Button } from '../ui/Button';
 import { TableRowSkeleton } from '../ui/Skeleton';
 import { EmptyState } from '../ui/EmptyState';
-import { RequestStatus } from '../../types';
+import { RequestStatus, Role } from '../../types';
 import type { AccessRequest, RiskAssessmentResult } from '../../types';
 
 interface RequestsTableProps {
@@ -19,8 +20,33 @@ interface RequestsTableProps {
 
 type Decision = RequestStatus.APPROVED | RequestStatus.DENIED;
 
+function ApprovalProgress({ request }: { request: AccessRequest }) {
+  if (!request.requiredApprovals.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {request.requiredApprovals.map((role) => {
+        const done = request.approvals.some((a) => a.role === role);
+        return (
+          <span
+            key={role}
+            className={[
+              'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+              done
+                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                : 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',
+            ].join(' ')}
+          >
+            {done ? '✓' : '⏳'} {role}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export function RequestsTable({ requests, isLoading, onRequestUpdated }: RequestsTableProps) {
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   // Decision modal state
   const [selectedRequest, setSelectedRequest] = useState<AccessRequest | null>(null);
@@ -50,6 +76,25 @@ export function RequestsTable({ requests, isLoading, onRequestUpdated }: Request
   const handleDecided = (updated: AccessRequest) => {
     onRequestUpdated(updated);
   };
+
+  /** Returns true if the current user can approve the given request. */
+  function canApproveRequest(req: AccessRequest): boolean {
+    if (!user) return false;
+    if (user.role === Role.ADMIN) return true;
+    if (!req.requiredApprovals.includes(user.role)) return false;
+    // Hide the Approve button if this role has already approved
+    return !req.approvals.some((a) => a.role === user.role);
+  }
+
+  /** Returns true if the current user can deny the given request. */
+  function canDenyRequest(req: AccessRequest): boolean {
+    if (!user) return false;
+    if (user.role === Role.ADMIN) return true;
+    return req.requiredApprovals.includes(user.role);
+  }
+
+  const isActionable = (req: AccessRequest) =>
+    req.status === RequestStatus.PENDING || req.status === RequestStatus.PARTIALLY_APPROVED;
 
   if (isLoading) {
     return (
@@ -108,7 +153,7 @@ export function RequestsTable({ requests, isLoading, onRequestUpdated }: Request
           <tbody className="divide-y divide-gray-100 bg-white">
             {requests.map((req) => {
               const risk = riskMap[req.id];
-              const isPending = req.status === RequestStatus.PENDING;
+              const actionable = isActionable(req);
 
               return (
                 <>
@@ -134,9 +179,13 @@ export function RequestsTable({ requests, isLoading, onRequestUpdated }: Request
                       {timeAgo(req.createdAt)}
                     </td>
 
-                    {/* Status */}
+                    {/* Status + approval progress */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge status={req.status} />
+                      {(req.status === RequestStatus.PARTIALLY_APPROVED ||
+                        (actionable && req.requiredApprovals.length > 1)) && (
+                        <ApprovalProgress request={req} />
+                      )}
                     </td>
 
                     {/* Actions */}
@@ -168,24 +217,24 @@ export function RequestsTable({ requests, isLoading, onRequestUpdated }: Request
                           <RiskBadge riskLevel={risk.riskLevel} score={risk.score} />
                         )}
 
-                        {/* Decision buttons — only for PENDING */}
-                        {isPending && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="primary"
-                              onClick={() => openDecisionModal(req, RequestStatus.APPROVED)}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() => openDecisionModal(req, RequestStatus.DENIED)}
-                            >
-                              Deny
-                            </Button>
-                          </>
+                        {/* Decision buttons — only for actionable requests where role is authorized */}
+                        {actionable && canApproveRequest(req) && (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => openDecisionModal(req, RequestStatus.APPROVED)}
+                          >
+                            Approve
+                          </Button>
+                        )}
+                        {actionable && canDenyRequest(req) && (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => openDecisionModal(req, RequestStatus.DENIED)}
+                          >
+                            Deny
+                          </Button>
                         )}
                       </div>
                     </td>
