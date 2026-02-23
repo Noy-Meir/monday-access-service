@@ -7,6 +7,13 @@ export const ACCESS_REQUEST_FIELDS = gql`
     applicationName
     justification
     status
+    requiredApprovals
+    approvals {
+      role
+      approvedBy
+      approvedByEmail
+      approvedAt
+    }
     createdBy
     createdByEmail
     createdAt

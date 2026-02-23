@@ -5,7 +5,8 @@ import { IAccessRequestRepository } from '../repositories/IAccessRequestReposito
 import { AuthorizationService } from './AuthorizationService';
 import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
-import { getRequiredApprovals } from '../../../config/applications';
+import {getRequiredApprovals} from "../config/applications";
+
 
 export interface CreateAccessRequestInput {
   applicationName: string;

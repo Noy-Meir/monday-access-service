@@ -23,6 +23,10 @@ function serializeRequest(request: AccessRequest) {
     decisionAt: request.decisionAt instanceof Date
       ? request.decisionAt.toISOString()
       : request.decisionAt,
+    approvals: request.approvals.map((a) => ({
+      ...a,
+      approvedAt: a.approvedAt instanceof Date ? a.approvedAt.toISOString() : a.approvedAt,
+    })),
   };
 }
 

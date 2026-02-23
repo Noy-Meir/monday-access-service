@@ -1,11 +1,15 @@
 export const typeDefs = `#graphql
   enum Role {
     EMPLOYEE
-    APPROVER
+    MANAGER
+    IT
+    HR
+    ADMIN
   }
 
   enum RequestStatus {
     PENDING
+    PARTIALLY_APPROVED
     APPROVED
     DENIED
   }
@@ -29,11 +33,20 @@ export const typeDefs = `#graphql
     user: User!
   }
 
+  type Approval {
+    role: Role!
+    approvedBy: String!
+    approvedByEmail: String!
+    approvedAt: String!
+  }
+
   type AccessRequest {
     id: ID!
     applicationName: String!
     justification: String!
     status: RequestStatus!
+    requiredApprovals: [Role!]!
+    approvals: [Approval!]!
     createdBy: String!
     createdByEmail: String!
     createdAt: String!
