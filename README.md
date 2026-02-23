@@ -1,7 +1,7 @@
 # monday-access-service
 
 A production-grade REST API for managing internal application access requests.
-Employees submit requests; approvers approve or deny them. All activity is captured with a full audit trail.
+Employees submit requests; approvers approve or deny them. An AI agent performs automated risk assessment on each request. All activity is captured with a full audit trail.
 
 ---
 
@@ -15,25 +15,27 @@ graph TD
 
     Express --> HealthCheck["GET /health (no auth)"]
     Express --> AuthRouter["POST /api/auth/login\n(authRateLimiter)"]
-    Express --> AccessRouter["/api/access-requests\n(createRequestRateLimiter on POST)"]
+    Express --> AccessRouter["/api/access-requests\n(authenticate middleware)"]
 
     AuthRouter --> AuthController
-    AuthController --> AuthService
-
-    AccessRouter --> authenticate["authenticate middleware\n(JWT verification)"]
-    authenticate --> authorize["authorize middleware\n(permission-based RBAC)"]
-    authorize --> validate["validate middleware\n(Zod schema)"]
-    validate --> AccessRequestController
-
-    AccessRequestController --> AccessRequestService
-    AccessRequestService --> AuthorizationService["AuthorizationService\n(ROLE_PERMISSIONS matrix)"]
-    AccessRequestService --> IAccessRequestRepository
-    IAccessRequestRepository -.->|implements| InMemoryAccessRequestRepository
-    InMemoryAccessRequestRepository --> Store[(In-Memory Map)]
-
+    AuthController --> AuthService["AuthService\n(modules/auth)"]
     AuthService -->|sign / verify| JWT
     AuthService --> UserMap[(User Map)]
     UserMap -->|populated at startup| SeedData
+
+    AccessRouter --> AccessController["AccessRequestController\n(modules/access-requests)"]
+    AccessRouter --> RiskController["RiskAssessmentController\n(modules/ai-agent)"]
+
+    AccessController --> AccessRequestService["AccessRequestService"]
+    AccessRequestService --> AuthorizationService["AuthorizationService\n(ROLE_PERMISSIONS matrix)"]
+    AccessRequestService --> IRepo["IAccessRequestRepository"]
+    IRepo -.->|implements| InMemoryRepo[(In-Memory Map)]
+
+    RiskController --> AccessRequestService
+    RiskController --> Agent["RiskAssessmentAgent"]
+    Agent --> IAiProvider["IAiProvider"]
+    IAiProvider -.->|AI_PROVIDER=mock| MockProvider["MockAiProvider\n(rule-based scoring)"]
+    IAiProvider -.->|AI_PROVIDER=claude| ClaudeProvider["ClaudeAiProvider\n(Anthropic API)"]
 
     Express --> ErrorMiddleware["Global Error Middleware\n(last handler)"]
 ```
@@ -44,25 +46,36 @@ graph TD
 
 ```
 src/
-├── config/               # Typed env config with fail-fast validation
-├── models/               # Domain models, enums, interfaces
-│   ├── AccessRequest.ts  # Core domain types: AccessRequest, User, Role, TokenPayload
-│   └── Permission.ts     # Permission enum + ROLE_PERMISSIONS matrix (auth source of truth)
-├── repositories/         # IAccessRequestRepository + InMemoryAccessRequestRepository
-├── services/             # Business logic
-│   ├── AuthService.ts
-│   ├── AuthorizationService.ts  # hasPermission / assertPermission
-│   └── AccessRequestService.ts
-├── controllers/          # HTTP layer only: parse → call service → respond
-├── middleware/           # authenticate, authorize, validate, rateLimiter, requestLogger, error
-├── routes/               # Route factories (auth.routes, accessRequest.routes)
-├── validators/           # Zod schemas for each endpoint
-├── utils/                # AppError, Winston logger
-├── seed/                 # Mock users and requests — populates store at startup
-├── types/                # Express module augmentation (req.user)
-├── container.ts          # DI wiring — the only place `new` is called on services
-├── app.ts                # Express app factory (helmet, rate limiters, routes, error handler)
-└── index.ts              # Bootstrap: seed → listen → graceful shutdown handlers
+├── config/                        # Typed env config with fail-fast validation
+├── middleware/                    # authenticate, authorize, validate, rateLimiter, requestLogger, error
+├── models/                        # Shared domain models, enums, interfaces
+│   ├── AccessRequest.ts           # AccessRequest, User, Role, TokenPayload
+│   └── Permission.ts              # Permission enum + ROLE_PERMISSIONS matrix
+├── modules/
+│   ├── access-requests/           # Access request feature module
+│   │   ├── controllers/           # HTTP layer: parse → service → respond
+│   │   ├── repositories/          # IAccessRequestRepository + InMemoryAccessRequestRepository
+│   │   ├── routes/                # Express router factory
+│   │   ├── services/              # AccessRequestService (all business logic)
+│   │   └── validators/            # Zod schemas for create and decide endpoints
+│   ├── ai-agent/                  # AI risk assessment module (isolated from business logic)
+│   │   ├── agent/                 # IRiskAssessmentAgent interface + RiskAssessmentAgent
+│   │   ├── controllers/           # RiskAssessmentController
+│   │   ├── providers/             # IAiProvider, MockAiProvider, ClaudeAiProvider
+│   │   ├── routes/                # Risk assessment router factory
+│   │   ├── types.ts               # DTOs: RiskAssessmentInput, ProviderResult, RiskAssessmentResult
+│   │   └── index.ts               # Public barrel — only export surface for the module
+│   └── auth/                      # Authentication & authorization module
+│       ├── controllers/           # AuthController
+│       ├── routes/                # Auth router factory
+│       ├── services/              # AuthService (JWT) + AuthorizationService (RBAC)
+│       └── validators/            # login.schema
+├── seed/                          # Mock users and requests — populates store at startup
+├── types/                         # Express module augmentation (req.user: TokenPayload)
+├── utils/                         # AppError, Winston logger
+├── container.ts                   # DI wiring — the only place `new` is called on services
+├── app.ts                         # Express app factory (helmet, rate limiters, routes, error handler)
+└── index.ts                       # Bootstrap: seed → listen → graceful shutdown handlers
 ```
 
 ---
@@ -71,12 +84,13 @@ src/
 
 | Principle | How it's applied |
 |-----------|-----------------|
-| **Single Responsibility** | Controllers handle HTTP only. Services own business logic. Repositories own data access. |
-| **Open/Closed** | `IAccessRequestRepository` interface — swap the DB engine without touching service code. |
-| **Dependency Inversion** | `AccessRequestService` depends on the interface, not the concrete class. |
+| **Single Responsibility** | Controllers handle HTTP only. Services own business logic. Repositories own data access. AI agent owns LLM interaction. |
+| **Open/Closed** | `IAccessRequestRepository` and `IAiProvider` interfaces — swap implementations without touching consumer code. |
+| **Dependency Inversion** | Services depend on interfaces, never concrete classes. |
 | **Dependency Injection** | All dependencies injected via constructors, wired once in `container.ts`. |
-| **Factory Pattern** | Middleware factories (`createAuthenticateMiddleware`, `createAuthorizeMiddleware`, `createValidateMiddleware`) close over injected dependencies. |
+| **Module Isolation** | Each `modules/` subdirectory is a self-contained vertical slice. Cross-module imports go through declared interfaces only. |
 | **Repository Pattern** | Decouples storage from domain logic. |
+| **Provider Pattern** | `IAiProvider` decouples the agent from any specific LLM. Swap `mock` ↔ `claude` with one environment variable. |
 | **Permission-Based RBAC** | `ROLE_PERMISSIONS` matrix is the single source of truth. Routes and services reference `Permission` values — never role names. |
 
 ---
@@ -91,18 +105,16 @@ src/
 This is an MVP/assignment context where standing up a database would add infrastructure complexity without adding value to the design review. The deliberate trade-off is acceptable here because the **Repository Pattern** ensures this decision is fully contained.
 
 **How it stays production-ready:**
-`AccessRequestService` depends on `IAccessRequestRepository` — an interface with five methods (`save`, `findById`, `findByUserId`, `findByStatus`, `findAll`, `update`). The in-memory implementation is one concrete class that satisfies this contract. Replacing it with a PostgreSQL or MongoDB implementation requires:
+`AccessRequestService` depends on `IAccessRequestRepository` — an interface with six methods (`save`, `findById`, `findByUserId`, `findByStatus`, `findAll`, `update`). The in-memory implementation is one concrete class that satisfies this contract. Replacing it with a PostgreSQL or MongoDB implementation requires:
 1. Creating a new class that implements `IAccessRequestRepository`.
 2. Changing one line in `container.ts`.
 
-Zero changes to service, controller, or route code. This is the Dependency Inversion Principle applied to storage.
+Zero changes to service, controller, or route code.
 
 **Known limitations of this choice:**
 - Data is lost on process restart.
 - Not safe for multi-instance deployments (each instance has its own Map).
 - No transaction support.
-
-A production deployment would swap in a `PostgresAccessRequestRepository` or `MongoAccessRequestRepository` while keeping the entire business logic layer untouched.
 
 ---
 
@@ -118,29 +130,39 @@ Without centralised error handling, every route and service method is responsibl
 - `errorMiddleware` classifies errors into two buckets:
   - **Operational errors** (`AppError.isOperational === true`): known, expected failures (validation, 404, 403, 409). Logged at `warn` level. The human-readable `message` is safe to return to the client.
   - **Programmer errors** (everything else): unexpected failures. Logged at `error` level with full stack trace. The client receives only `"Internal server error"` — no internals are exposed.
-- `AppError` carries `statusCode` and optional `details` (Zod validation field errors). All clients receive the same envelope: `{ "error": { "message": "...", "details": [...] } }`.
-
-**Why `isOperational` instead of just `instanceof AppError`:**
-In CommonJS + TypeScript environments, `instanceof` checks across module boundaries can silently return `false`. The `isOperational = true as const` property is a belt-and-suspenders guard that survives any module resolution edge case.
+- All clients receive the same envelope: `{ "error": { "message": "...", "details": [...] } }`.
 
 ---
 
-### ADR-3 — Non-Functional Strengths
+### ADR-3 — AI Agent: Provider Pattern + Module Isolation
 
-#### Dependency Injection
-All services and repositories are instantiated exactly once in `container.ts` and injected via constructors. This makes unit testing trivial: every test replaces one dependency with a `jest.Mocked<T>` without touching the class under test. It also means the full dependency graph is visible in one file.
+**Decision:** Implement the AI agent as a fully isolated module (`modules/ai-agent/`) behind an `IAiProvider` interface, with `mock` and `claude` implementations selectable at runtime.
+
+**Rationale:**
+Business logic must not depend on which LLM is used. The risk assessment flow — input mapping, timing, logging, result normalization — is the same regardless of provider. Separating this into `RiskAssessmentAgent` (orchestration) and `IAiProvider` (LLM call) means:
+- Tests run fully offline using `MockAiProvider` without any API credentials.
+- Switching to a different LLM (GPT-4, Gemini) requires only a new `IAiProvider` implementation, with no changes to the agent, controller, or service.
+- The Claude API key is never a build-time dependency — the provider is resolved at startup from `AI_PROVIDER` and `ANTHROPIC_API_KEY` env vars.
+
+**Evaluation signal:**
+`RiskAssessmentAgent` produces a structured result on every call:
+- `score` — integer 0–100 (0 = no risk, 100 = maximum risk)
+- `riskLevel` — enum: `LOW | MEDIUM | HIGH | CRITICAL`
+- `reasoning` — human-readable explanation
+- `metrics.executionTimeMs` — latency of the LLM call
+- `metrics.tokensUsed` — token consumption (Claude only)
+
+The agent logs `info` for LOW/MEDIUM results and `warn` for HIGH/CRITICAL, enabling alert rules without custom log parsing. `MockAiProvider` uses a rule-based keyword + justification-length matrix to produce deterministic scores — making it both testable and a useful demonstration of the scoring semantics.
+
+---
+
+### ADR-4 — Non-Functional Strengths
 
 #### Input Validation with Zod
-Every request body is parsed and validated by a Zod schema before it reaches the controller. The `createValidateMiddleware` factory replaces `req.body` with the typed, coerced output on success. On failure it produces structured field-level errors (`[{ field: "justification", message: "..." }]`) rather than generic 400 messages. Zod's TypeScript inference means the validator and the TypeScript type are always in sync — you cannot have a type that describes a shape that the schema doesn't enforce.
+Every request body is parsed and validated by a Zod schema before it reaches the controller. The `createValidateMiddleware` factory replaces `req.body` with the typed, coerced output on success. On failure it produces structured field-level errors rather than generic 400 messages. Zod's TypeScript inference means the validator and the type are always in sync.
 
 #### Security Headers with Helmet
-`helmet()` is the first middleware in `app.ts`. It sets ~15 HTTP response headers including:
-- `X-Frame-Options: DENY` — prevents clickjacking
-- `X-Content-Type-Options: nosniff` — prevents MIME-type sniffing attacks
-- `Content-Security-Policy` — restricts resource loading origins
-- `Strict-Transport-Security` — enforces HTTPS in production
-
-Applied globally, every response — including error responses and 404s — carries the full security header set.
+`helmet()` is the first middleware in `app.ts`. It sets ~15 HTTP response headers including `X-Frame-Options`, `X-Content-Type-Options`, `Content-Security-Policy`, and `Strict-Transport-Security`. Applied globally so every response — including error responses and 404s — carries the full security header set.
 
 #### Rate Limiting
 Three-tier rate limiting via `express-rate-limit`:
@@ -151,12 +173,12 @@ Three-tier rate limiting via `express-rate-limit`:
 | `authRateLimiter` | 10 req / 15 min | `POST /api/auth/login` |
 | `createRequestRateLimiter` | 30 req / 15 min | `POST /api/access-requests` |
 
-The auth limiter directly defends against credential-stuffing and password-spray attacks. All rate-limit responses use the same `{ "error": { "message": "..." } }` envelope as the rest of the API so clients have a uniform contract. The `RateLimit` response header (RFC draft-7) tells compliant clients when they can retry.
+The auth limiter directly defends against credential-stuffing and password-spray attacks.
 
 #### Structured Logging
 Winston is configured with environment-aware formats:
 - **Development:** human-readable, colorized, with stack traces inline.
-- **Production:** newline-delimited JSON with a `service` field stamped on every entry via `defaultMeta`. Suitable for direct ingestion into Datadog, ELK, CloudWatch Logs, or any structured log aggregator.
+- **Production:** newline-delimited JSON with a `service` field stamped on every entry. Suitable for direct ingestion into CloudWatch Logs, Datadog, ELK, or any structured log aggregator.
 
 Request logs carry `method`, `path`, `statusCode`, `durationMs`, and `userId`. Log level tracks severity: `error` for 5xx, `warn` for 4xx, `info` for normal flow — enabling dashboard alerting without custom parsing rules.
 
@@ -230,7 +252,11 @@ npm install
 
 # 2. Configure environment
 cp .env.example .env
-# Set JWT_SECRET to a strong random string
+# Required: JWT_SECRET — set to a strong random string
+# Optional AI config (defaults to mock provider):
+#   AI_PROVIDER=claude          # or 'mock' (default)
+#   ANTHROPIC_API_KEY=sk-...    # required if AI_PROVIDER=claude
+#   ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 
 # 3. Start dev server (hot reload via tsx)
 npm run dev
@@ -252,93 +278,35 @@ docker-compose up --build
 
 # Or manually
 docker build -t monday-access-service .
-docker run -p 3000:3000 -e JWT_SECRET=your-secret monday-access-service
+docker run -p 3000:3000 \
+  -e JWT_SECRET=your-secret \
+  -e AI_PROVIDER=mock \
+  monday-access-service
 ```
 
 ### Tests
 
 ```bash
-npm test               # run all unit tests
+npm test               # run all unit tests (153 tests, 10 suites)
 npm run test:coverage  # with coverage report
 ```
 
 ---
 
-## API Reference
+## API Overview
 
-### Health Check
-
-```
-GET /health
-```
-No authentication. Returns `{ "status": "ok", "timestamp": "..." }`.
-
----
+### Health
+- `GET /health`
 
 ### Auth
-
-#### Login
-```
-POST /api/auth/login
-Content-Type: application/json
-
-{ "email": "alice@company.com", "password": "Password123!" }
-```
-**Response:**
-```json
-{
-  "data": {
-    "token": "<jwt>",
-    "user": { "id": "...", "email": "alice@company.com", "name": "Alice Employee", "role": "EMPLOYEE" }
-  }
-}
-```
-
----
+- `POST /api/auth/login`
 
 ### Access Requests
-
-All endpoints require `Authorization: Bearer <token>`.
-
-#### Create a Request
-```
-POST /api/access-requests
-```
-Body: `{ "applicationName": "Salesforce", "justification": "Need for Q3 campaign management." }`
-→ `201 Created`
-
-#### Approve or Deny a Request *(requires `access_request:decide`)*
-```
-PATCH /api/access-requests/:id/decision
-```
-Body: `{ "decision": "APPROVED", "decisionNote": "Approved after security review." }`
-→ `200 OK`
-
-#### Get Requests by User
-```
-GET /api/access-requests/user/:userId
-```
-Employees can only retrieve their own (`userId` must match their token sub). Approvers can retrieve any user's.
-
-#### Filter by Status *(requires `access_request:view:by_status`)*
-```
-GET /api/access-requests/status/PENDING
-GET /api/access-requests/status/APPROVED
-GET /api/access-requests/status/DENIED
-```
-
-#### List All Requests *(requires `access_request:view:all`)*
-```
-GET /api/access-requests
-```
-
-#### Get a Single Request by ID
-```
-GET /api/access-requests/:id
-```
-Employees can only retrieve their own requests. Approvers can retrieve any.
-
----
+- `POST   /api/access-requests`
+- `PATCH  /api/access-requests/:id/decision`
+- `GET    /api/access-requests`
+- `GET    /api/access-requests/status/:status`
+- `GET    /api/access-requests/user/:userId`
 
 ## Error Response Format
 
@@ -362,7 +330,77 @@ All errors follow a consistent envelope so clients have one code path for error 
 | 409 | State conflict (e.g. deciding on a non-PENDING request) |
 | 429 | Rate limit exceeded |
 | 500 | Internal server error (details never exposed to client) |
+| 502 | AI provider returned unparseable response |
+| 503 | AI provider unavailable |
 
+---
+
+## Deploying to AWS
+
+The service ships as a multi-stage Docker image and is designed to run on **AWS ECS Fargate** (serverless containers — no EC2 fleet to manage). The `Dockerfile` produces a minimal Alpine-based production image running as a non-root user.
+
+### Recommended Stack
+
+| Component | AWS Service |
+|-----------|-------------|
+| Container image | Amazon ECR |
+| Container runtime | ECS Fargate |
+| Load balancer | Application Load Balancer (ALB) |
+| Secrets | AWS Secrets Manager |
+| Logs | CloudWatch Logs |
+| Health check | ALB → `GET /health` |
+
+### Step-by-step Deployment
+
+```bash
+# 1. Authenticate Docker to ECR
+aws ecr get-login-password --region us-east-1 \
+  | docker login --username AWS --password-stdin \
+    <account-id>.dkr.ecr.us-east-1.amazonaws.com
+
+# 2. Build and push the image
+docker build -t monday-access-service .
+docker tag monday-access-service:latest \
+  <account-id>.dkr.ecr.us-east-1.amazonaws.com/monday-access-service:latest
+docker push \
+  <account-id>.dkr.ecr.us-east-1.amazonaws.com/monday-access-service:latest
+
+# 3. Create an ECS Fargate service via AWS Console or CDK/Terraform
+#    Task definition environment variables:
+#      NODE_ENV           = production
+#      PORT               = 3000
+#      JWT_SECRET         → reference from Secrets Manager
+#      AI_PROVIDER        = claude (or mock)
+#      ANTHROPIC_API_KEY  → reference from Secrets Manager (if AI_PROVIDER=claude)
+```
+
+### Secrets Management
+
+Sensitive values (`JWT_SECRET`, `ANTHROPIC_API_KEY`) should be stored in **AWS Secrets Manager** and injected at container startup via ECS task definition `secrets` references — never baked into the image or passed as plain-text environment variables.
+
+---
+
+## Monitoring & Observability
+
+### Logs
+- Structured, newline-delimited JSON via Winston.
+- Each log includes: `level`, `message`, `service`, `requestId`, `userId`, `method`, `path`, `statusCode`, `durationMs`, `riskLevel`, `score`, `provider`, `executionTimeMs`.
+- Can be forwarded to CloudWatch, Datadog, or similar systems.
+
+### Key Metrics
+- HTTP 5xx error rate – alert if >1% over 5 min
+- p99 request latency – alert if >2 s
+- AI provider errors (502/503) – alert on any occurrence
+- AI HIGH/CRITICAL assessments – investigate spikes
+- AI execution time (p99) – alert if >5 s
+
+### Tracing
+- Optional end-to-end tracing with AWS X-Ray or OpenTelemetry.
+- Trace ID propagated from `authenticate` middleware through service and AI agent calls.
+
+### Health Check
+- `GET /health` returns `{ "status": "ok", "timestamp": "..." }`.
+- Can be used for load balancer, Kubernetes, or uptime monitoring.
 ---
 
 ## Key Assumptions
@@ -372,3 +410,4 @@ All errors follow a consistent envelope so clients have one code path for error 
 3. **Single instance** — No distributed state. A multi-instance deployment would need a shared store (Redis, PostgreSQL) and a distributed rate-limit backend.
 4. **Stateless JWT** — Tokens are not revocable before expiry. A production system would use short-lived access tokens with refresh tokens, or a token denylist in Redis.
 5. **Rate-limit store** — `express-rate-limit` defaults to an in-process `MemoryStore`. In a multi-instance deployment this must be replaced with a Redis store (`rate-limit-redis`) so limits are enforced cluster-wide.
+6. **AI provider fallback** — If `AI_PROVIDER=claude` but `ANTHROPIC_API_KEY` is not set, the service logs a warning and falls back to `MockAiProvider` automatically. It will not fail to start.
