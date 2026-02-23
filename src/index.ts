@@ -58,6 +58,8 @@ async function bootstrap(): Promise<void> {
           body: req.body,
         },
         context: async () => ({
+          req,
+          res,
           actor,
           accessRequestService: container.accessRequestService,
           authService: container.authService,

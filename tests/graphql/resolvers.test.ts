@@ -13,10 +13,19 @@
  * AccessRequestService.test.ts.
  */
 import { ApolloServer } from '@apollo/server';
+import type { Request, Response } from 'express';
 import { typeDefs } from '../../src/graphql/typeDefs';
 import { resolvers } from '../../src/graphql/resolvers';
 import type { GraphQLContext } from '../../src/graphql/context';
 import { AuthorizationService } from '../../src/services/AuthorizationService';
+
+// Rate limiters always pass through in unit tests — their behaviour is an
+// integration concern tested separately (or manually via the .http files).
+jest.mock('../../src/middleware/rateLimiter.middleware', () => ({
+  authRateLimiter: jest.fn((_req: unknown, _res: unknown, next: (err?: unknown) => void) => next()),
+  createRequestRateLimiter: jest.fn((_req: unknown, _res: unknown, next: (err?: unknown) => void) => next()),
+  generalRateLimiter: jest.fn((_req: unknown, _res: unknown, next: (err?: unknown) => void) => next()),
+}));
 import { RequestStatus, Role, TokenPayload } from '../../src/models/AccessRequest';
 import { AppError } from '../../src/utils/AppError';
 import {
@@ -50,6 +59,8 @@ function buildMockContext(
   overrides: Partial<GraphQLContext> = {}
 ): GraphQLContext {
   return {
+    req: {} as Request,
+    res: {} as Response,
     actor,
     authorizationService: new AuthorizationService(),
     authService: {

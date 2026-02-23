@@ -1,6 +1,8 @@
 import { GraphQLError } from 'graphql';
+import type { RequestHandler } from 'express';
 import { AccessRequest, RequestStatus, Role } from '../models/AccessRequest';
 import { Permission } from '../models/Permission';
+import { authRateLimiter, createRequestRateLimiter } from '../middleware/rateLimiter.middleware';
 import type { GraphQLContext } from './context';
 
 // ── Authorization helpers ──────────────────────────────────────────────────────
@@ -55,6 +57,39 @@ function withPermission<TArgs = Record<string, unknown>>(
 ): ResolverFn<TArgs> {
   return async (parent, args, ctx) => {
     requirePermission(ctx, permission);
+    return resolver(parent, args, ctx);
+  };
+}
+
+/**
+ * Declarative resolver wrapper that enforces an express-rate-limit policy
+ * before delegating to the wrapped resolver.
+ *
+ * The limiter must use handler: (_req, _res, next) => next(error) so that a
+ * rejected request propagates through the Promise below instead of writing a
+ * raw HTTP 429 response to the socket.  Both authRateLimiter and
+ * createRequestRateLimiter are configured this way in rateLimiter.middleware.ts.
+ *
+ * Usage:
+ *   someField: withRateLimit(authRateLimiter, async (_, args, ctx) => { … })
+ *   someField: withRateLimit(limiter, withPermission(perm, resolver))
+ */
+function withRateLimit<TArgs = Record<string, unknown>>(
+  limiter: RequestHandler,
+  resolver: ResolverFn<TArgs>
+): ResolverFn<TArgs> {
+  return async (parent, args, ctx) => {
+    await new Promise<void>((resolve, reject) => {
+      limiter(ctx.req, ctx.res, (err?: unknown) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    }).catch(() => {
+      throw new GraphQLError('Too many requests. Please try again later.', {
+        extensions: { code: 'TOO_MANY_REQUESTS' },
+      });
+    });
+
     return resolver(parent, args, ctx);
   };
 }
@@ -164,29 +199,38 @@ export const resolvers = {
 
   // ── Mutations ────────────────────────────────────────────────────────────────
   Mutation: {
-    /** login — public endpoint, no authentication required. */
-    login: async (
-      _: unknown,
-      { email, password }: { email: string; password: string },
-      ctx: GraphQLContext
-    ) => {
-      return ctx.authService.login(email, password);
-    },
-
-    /** createRequest — requires CREATE permission (all roles). */
-    createRequest: withPermission(
-      Permission.ACCESS_REQUEST_CREATE,
-      async (
-        _,
-        { applicationName, justification }: { applicationName: string; justification: string },
-        ctx
-      ) => {
-        const request = await ctx.accessRequestService.create(
-          { applicationName, justification },
-          ctx.actor!
-        );
-        return serializeRequest(request);
+    /**
+     * login — public endpoint, no authentication required.
+     * Rate-limited to 5 attempts / 5 min per IP via authRateLimiter.
+     */
+    login: withRateLimit(
+      authRateLimiter,
+      async (_: unknown, { email, password }: { email: string; password: string }, ctx) => {
+        return ctx.authService.login(email, password);
       }
+    ),
+
+    /**
+     * createRequest — requires CREATE permission (all roles).
+     * Rate-limited to 10 submissions / 5 min per IP via createRequestRateLimiter.
+     * withRateLimit runs first (cheaper), then withPermission (auth check).
+     */
+    createRequest: withRateLimit(
+      createRequestRateLimiter,
+      withPermission(
+        Permission.ACCESS_REQUEST_CREATE,
+        async (
+          _,
+          { applicationName, justification }: { applicationName: string; justification: string },
+          ctx
+        ) => {
+          const request = await ctx.accessRequestService.create(
+            { applicationName, justification },
+            ctx.actor!
+          );
+          return serializeRequest(request);
+        }
+      )
     ),
 
     /**

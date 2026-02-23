@@ -1,3 +1,4 @@
+import type { Request, Response } from 'express';
 import { TokenPayload } from '../models/AccessRequest';
 import { AccessRequestService } from '../services/AccessRequestService';
 import { AuthService } from '../services/AuthService';
@@ -5,6 +6,10 @@ import { AuthorizationService } from '../services/AuthorizationService';
 import { IRiskAssessmentAgent } from '../modules/ai-agent/agent/IRiskAssessmentAgent';
 
 export interface GraphQLContext {
+  /** Raw Express request — passed to rate-limiter middleware inside resolvers. */
+  req: Request;
+  /** Raw Express response — passed to rate-limiter middleware inside resolvers. */
+  res: Response;
   actor: TokenPayload | null;
   accessRequestService: AccessRequestService;
   authService: AuthService;
