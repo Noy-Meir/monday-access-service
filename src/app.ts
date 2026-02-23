@@ -33,7 +33,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', createAuthRouter(container.authController));
 app.use(
   '/api/access-requests',
-  createAccessRequestRouter(container.accessRequestController, container.authService)
+  createAccessRequestRouter(container.accessRequestController, container.authService, container.riskAssessmentController)
 );
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
