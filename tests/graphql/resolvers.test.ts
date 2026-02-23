@@ -68,7 +68,6 @@ function buildMockContext(
       verifyToken: jest.fn(),
       findUserById: jest.fn(),
       getUserRole: jest.fn(),
-      registerUser: jest.fn(),
     } as unknown as GraphQLContext['authService'],
     accessRequestService: {
       create: jest.fn(),
