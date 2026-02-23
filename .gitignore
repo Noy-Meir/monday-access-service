@@ -4,3 +4,8 @@ dist/
 logs/
 *.log
 .DS_Store
+
+# Client
+client/node_modules/
+client/dist/
+client/.env
