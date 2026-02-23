@@ -1,13 +1,11 @@
 # =============================================================================
-# monday-access-service — Manual API Tests
+# monday-access-service — GraphQL API Tests
 # WebStorm REST Client (.http)
 #
 # HOW TO USE:
 #   1. Start the server:  npm run dev
-#   2. Run requests top-to-bottom (Employee Login and IT Login must
-#      run first — they populate {{auth_token}} and {{it_token}}).
-#   3. After "Create Access Request", copy the returned `id` and paste it
-#      into the @request_id variable below.
+#   2. Run requests top-to-bottom — login steps must run first to capture tokens.
+#   3. After "Create Access Request", copy the returned `id` into @request_id.
 #
 # SEEDED USERS:
 #   alice@company.com  / Password123!  → EMPLOYEE
@@ -16,11 +14,13 @@
 #   dave@company.com   / Password123!  → HR
 #   eve@company.com    / Password123!  → MANAGER
 #   frank@company.com  / Password123!  → ADMIN
+#
+# ENDPOINT: POST http://localhost:3000/graphql  (all operations)
 # =============================================================================
 
-@baseUrl   = http://localhost:3000
+@graphqlUrl = http://localhost:3000/graphql
 
-# After running "Create Access Request", paste the returned `id` here
+# Paste IDs here after running the create steps
 @request_id       = replace-me-with-real-id
 @multi_request_id = replace-me-with-real-id
 
@@ -31,7 +31,7 @@
 
 ### Sanity-check that the server is up. No auth required.
 # Expected: 200 { "status": "ok", "timestamp": "..." }
-GET {{baseUrl}}/health
+GET http://localhost:3000/health
 
 
 # =============================================================================
@@ -39,184 +39,222 @@ GET {{baseUrl}}/health
 # =============================================================================
 
 ### [1] Login as Employee (alice)
-# Expected: 200 { "data": { "token": "...", "user": { "role": "EMPLOYEE", ... } } }
-POST {{baseUrl}}/api/auth/login
+# Expected: { "data": { "login": { "token": "...", "user": { "role": "EMPLOYEE" } } } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 
 {
-  "email": "alice@company.com",
-  "password": "Password123!"
+  "query": "mutation Login($email: String!, $password: String!) { login(email: $email, password: $password) { token user { id email name role } } }",
+  "variables": { "email": "alice@company.com", "password": "Password123!" }
 }
 
 > {%
-  client.global.set("auth_token", response.body.data.token);
-  client.log("Employee token captured: " + response.body.data.token.substring(0, 20) + "...");
+  client.global.set("auth_token", response.body.data.login.token);
+  client.log("Employee token captured: " + response.body.data.login.token.substring(0, 20) + "...");
 %}
 
 ###
 
 ### [2] Create Access Request — GitHub (tech, needs IT)
-# Expected: 201 { "data": { "id": "...", "status": "PENDING", "requiredApprovals": ["IT"], ... } }
-POST {{baseUrl}}/api/access-requests
+# Expected: { "data": { "createRequest": { "id": "...", "status": "PENDING", "requiredApprovals": ["IT"] } } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "applicationName": "GitHub",
-  "justification": "Need access to manage code repositories for the upcoming Q3 development sprint."
+  "query": "mutation CreateRequest($app: String!, $just: String!) { createRequest(applicationName: $app, justification: $just) { id applicationName status requiredApprovals createdByEmail createdAt } }",
+  "variables": {
+    "app": "GitHub",
+    "just": "Need access to manage code repositories for the upcoming Q3 development sprint."
+  }
 }
 
 > {%
-  client.global.set("request_id", response.body.data.id);
-  client.log("Request ID captured: " + response.body.data.id);
+  client.global.set("request_id", response.body.data.createRequest.id);
+  client.log("Request ID captured: " + response.body.data.createRequest.id);
 %}
 
 ###
 
 ### [3] Get My Requests (Employee — own requests only)
-# Expected: 200 { "data": [ ... ] }
-GET {{baseUrl}}/api/access-requests/user/user-alice-001
+# Expected: { "data": { "myRequests": [ ... ] } }
+POST {{graphqlUrl}}
+Content-Type: application/json
 Authorization: Bearer {{auth_token}}
+
+{
+  "query": "query MyRequests($userId: ID!) { myRequests(userId: $userId) { id applicationName status requiredApprovals approvals { role approvedByEmail approvedAt } createdAt } }",
+  "variables": { "userId": "user-alice-001" }
+}
 
 ###
-
-### [4] Get a Specific Request by ID (Employee — own request)
-# Expected: 200 { "data": { "id": "...", "status": "PENDING", "requiredApprovals": ["IT"], ... } }
-GET {{baseUrl}}/api/access-requests/{{request_id}}
-Authorization: Bearer {{auth_token}}
 
 
 # =============================================================================
 # IT APPROVER WORKFLOW
 # =============================================================================
 
-### [5] IT Login (carol)
-# Expected: 200 { "data": { "token": "...", "user": { "role": "IT", ... } } }
-POST {{baseUrl}}/api/auth/login
+### [4] IT Login (carol)
+# Expected: { "data": { "login": { "token": "...", "user": { "role": "IT" } } } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 
 {
-  "email": "carol@company.com",
-  "password": "Password123!"
+  "query": "mutation Login($email: String!, $password: String!) { login(email: $email, password: $password) { token user { id email name role } } }",
+  "variables": { "email": "carol@company.com", "password": "Password123!" }
 }
 
 > {%
-  client.global.set("it_token", response.body.data.token);
-  client.log("IT token captured: " + response.body.data.token.substring(0, 20) + "...");
+  client.global.set("it_token", response.body.data.login.token);
+  client.log("IT token captured: " + response.body.data.login.token.substring(0, 20) + "...");
 %}
 
 ###
 
-### [5b] HR Login (dave)
-# Expected: 200 { "data": { "token": "...", "user": { "role": "HR", ... } } }
-POST {{baseUrl}}/api/auth/login
+### [4b] HR Login (dave)
+# Expected: { "data": { "login": { "token": "...", "user": { "role": "HR" } } } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 
 {
-  "email": "dave@company.com",
-  "password": "Password123!"
+  "query": "mutation Login($email: String!, $password: String!) { login(email: $email, password: $password) { token user { id email name role } } }",
+  "variables": { "email": "dave@company.com", "password": "Password123!" }
 }
 
 > {%
-  client.global.set("hr_token", response.body.data.token);
-  client.log("HR token captured: " + response.body.data.token.substring(0, 20) + "...");
+  client.global.set("hr_token", response.body.data.login.token);
+  client.log("HR token captured: " + response.body.data.login.token.substring(0, 20) + "...");
 %}
 
 ###
 
-### [5c] Manager Login (eve)
-# Expected: 200 { "data": { "token": "...", "user": { "role": "MANAGER", ... } } }
-POST {{baseUrl}}/api/auth/login
+### [4c] Manager Login (eve)
+# Expected: { "data": { "login": { "token": "...", "user": { "role": "MANAGER" } } } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 
 {
-  "email": "eve@company.com",
-  "password": "Password123!"
+  "query": "mutation Login($email: String!, $password: String!) { login(email: $email, password: $password) { token user { id email name role } } }",
+  "variables": { "email": "eve@company.com", "password": "Password123!" }
 }
 
 > {%
-  client.global.set("manager_token", response.body.data.token);
-  client.log("Manager token captured: " + response.body.data.token.substring(0, 20) + "...");
+  client.global.set("manager_token", response.body.data.login.token);
+  client.log("Manager token captured: " + response.body.data.login.token.substring(0, 20) + "...");
 %}
 
 ###
 
-### [5d] Admin Login (frank)
-# Expected: 200 { "data": { "token": "...", "user": { "role": "ADMIN", ... } } }
-POST {{baseUrl}}/api/auth/login
+### [4d] Admin Login (frank)
+# Expected: { "data": { "login": { "token": "...", "user": { "role": "ADMIN" } } } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 
 {
-  "email": "frank@company.com",
-  "password": "Password123!"
+  "query": "mutation Login($email: String!, $password: String!) { login(email: $email, password: $password) { token user { id email name role } } }",
+  "variables": { "email": "frank@company.com", "password": "Password123!" }
 }
 
 > {%
-  client.global.set("admin_token", response.body.data.token);
-  client.log("Admin token captured: " + response.body.data.token.substring(0, 20) + "...");
+  client.global.set("admin_token", response.body.data.login.token);
+  client.log("Admin token captured: " + response.body.data.login.token.substring(0, 20) + "...");
 %}
 
 ###
 
-### [6] Get ALL Requests (IT — non-employee role)
-# Expected: 200 { "data": [ ... all requests ... ] }
-GET {{baseUrl}}/api/access-requests
-Authorization: Bearer {{it_token}}
-
-###
-
-### [7] Filter Requests by Status — PENDING
-# Expected: 200 { "data": [ ... only PENDING requests ... ] }
-GET {{baseUrl}}/api/access-requests/status/PENDING
-Authorization: Bearer {{it_token}}
-
-###
-
-### [8] Filter Requests by Status — PARTIALLY_APPROVED
-# Expected: 200 { "data": [ ... only PARTIALLY_APPROVED requests ... ] }
-GET {{baseUrl}}/api/access-requests/status/PARTIALLY_APPROVED
-Authorization: Bearer {{it_token}}
-
-###
-
-### [9] Filter Requests by Status — APPROVED
-# Expected: 200 { "data": [ ... only APPROVED requests ... ] }
-GET {{baseUrl}}/api/access-requests/status/APPROVED
-Authorization: Bearer {{it_token}}
-
-###
-
-### [10] Get Any User's Requests (IT viewing alice's requests)
-# Expected: 200 { "data": [ ... alice's requests ... ] }
-GET {{baseUrl}}/api/access-requests/user/user-alice-001
-Authorization: Bearer {{it_token}}
-
-###
-
-### [11] APPROVE a GitHub request (IT approving a tech request)
-# GitHub needs only IT → single approval → status becomes APPROVED immediately
-# Expected: 200 { "data": { "status": "APPROVED", "decisionBy": "...", ... } }
-PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
+### [5] Get ALL Requests (IT — non-employee role)
+# Expected: { "data": { "allRequests": [ ... all requests ... ] } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{it_token}}
 
 {
-  "decision": "APPROVED",
-  "decisionNote": "Approved after verifying business justification and completing security review."
+  "query": "query { allRequests { id applicationName status requiredApprovals approvals { role approvedByEmail } createdByEmail createdAt } }"
 }
 
 ###
 
-### [12] DENY a Request (any authorized role)
-# First create another request (re-run step [2]) and use its ID.
-# Expected: 200 { "data": { "status": "DENIED", ... } }
-PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
+### [6] Filter Requests by Status — PENDING
+# Expected: { "data": { "requestsByStatus": [ ... only PENDING ... ] } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{it_token}}
 
 {
-  "decision": "DENIED",
-  "decisionNote": "Insufficient justification. Please provide a specific business case and re-submit."
+  "query": "query ByStatus($status: RequestStatus!) { requestsByStatus(status: $status) { id applicationName status } }",
+  "variables": { "status": "PENDING" }
+}
+
+###
+
+### [7] Filter Requests by Status — PARTIALLY_APPROVED
+POST {{graphqlUrl}}
+Content-Type: application/json
+Authorization: Bearer {{it_token}}
+
+{
+  "query": "query ByStatus($status: RequestStatus!) { requestsByStatus(status: $status) { id applicationName status approvals { role } } }",
+  "variables": { "status": "PARTIALLY_APPROVED" }
+}
+
+###
+
+### [8] Filter Requests by Status — APPROVED
+POST {{graphqlUrl}}
+Content-Type: application/json
+Authorization: Bearer {{it_token}}
+
+{
+  "query": "query ByStatus($status: RequestStatus!) { requestsByStatus(status: $status) { id applicationName status } }",
+  "variables": { "status": "APPROVED" }
+}
+
+###
+
+### [9] View alice's requests as IT (cross-user lookup)
+# Expected: { "data": { "myRequests": [ ... alice's requests ... ] } }
+POST {{graphqlUrl}}
+Content-Type: application/json
+Authorization: Bearer {{it_token}}
+
+{
+  "query": "query MyRequests($userId: ID!) { myRequests(userId: $userId) { id applicationName status } }",
+  "variables": { "userId": "user-alice-001" }
+}
+
+###
+
+### [10] APPROVE GitHub request (IT — single approval → APPROVED immediately)
+# Expected: { "data": { "decideRequest": { "status": "APPROVED", "decisionByEmail": "carol@company.com" } } }
+POST {{graphqlUrl}}
+Content-Type: application/json
+Authorization: Bearer {{it_token}}
+
+{
+  "query": "mutation Decide($id: ID!, $decision: RequestStatus!, $note: String) { decideRequest(id: $id, decision: $decision, decisionNote: $note) { id status decisionBy decisionByEmail decisionNote decisionAt } }",
+  "variables": {
+    "id": "{{request_id}}",
+    "decision": "APPROVED",
+    "note": "Approved after verifying business justification and completing security review."
+  }
+}
+
+###
+
+### [11] DENY a Request (any authorized role)
+# First create a new request (re-run step [2]) and update @request_id.
+# Expected: { "data": { "decideRequest": { "status": "DENIED" } } }
+POST {{graphqlUrl}}
+Content-Type: application/json
+Authorization: Bearer {{it_token}}
+
+{
+  "query": "mutation Decide($id: ID!, $decision: RequestStatus!, $note: String) { decideRequest(id: $id, decision: $decision, decisionNote: $note) { id status decisionByEmail decisionNote } }",
+  "variables": {
+    "id": "{{request_id}}",
+    "decision": "DENIED",
+    "note": "Insufficient justification. Please provide a specific business case and re-submit."
+  }
 }
 
 
@@ -225,47 +263,56 @@ Authorization: Bearer {{it_token}}
 # =============================================================================
 
 ### [MA-1] Create a Database Access request (requires MANAGER + IT)
-# Expected: 201 { "data": { "requiredApprovals": ["MANAGER", "IT"], "status": "PENDING", ... } }
-POST {{baseUrl}}/api/access-requests
+# Expected: { "data": { "createRequest": { "requiredApprovals": ["MANAGER","IT"], "status": "PENDING" } } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "applicationName": "Database Access",
-  "justification": "Need read-only access to investigate a customer-reported data discrepancy in the orders table."
+  "query": "mutation CreateRequest($app: String!, $just: String!) { createRequest(applicationName: $app, justification: $just) { id applicationName status requiredApprovals } }",
+  "variables": {
+    "app": "Database Access",
+    "just": "Need read-only access to investigate a customer-reported data discrepancy in the orders table."
+  }
 }
 
 > {%
-  client.global.set("multi_request_id", response.body.data.id);
-  client.log("Multi-approval request ID: " + response.body.data.id);
+  client.global.set("multi_request_id", response.body.data.createRequest.id);
+  client.log("Multi-approval request ID: " + response.body.data.createRequest.id);
 %}
 
 ###
 
 ### [MA-2] MANAGER approves → expect PARTIALLY_APPROVED
-# Only the MANAGER role has approved so far; IT still pending.
-# Expected: 200 { "data": { "status": "PARTIALLY_APPROVED", "approvals": [{"role":"MANAGER",...}], ... } }
-PATCH {{baseUrl}}/api/access-requests/{{multi_request_id}}/decision
+# Expected: { "data": { "decideRequest": { "status": "PARTIALLY_APPROVED", "approvals": [{"role":"MANAGER"}] } } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{manager_token}}
 
 {
-  "decision": "APPROVED",
-  "decisionNote": "Manager sign-off granted."
+  "query": "mutation Decide($id: ID!, $decision: RequestStatus!, $note: String) { decideRequest(id: $id, decision: $decision, decisionNote: $note) { id status approvals { role approvedByEmail approvedAt } } }",
+  "variables": {
+    "id": "{{multi_request_id}}",
+    "decision": "APPROVED",
+    "note": "Manager sign-off granted."
+  }
 }
 
 ###
 
-### [MA-3] IT approves → expect APPROVED
-# All required roles have now approved → final status is APPROVED.
-# Expected: 200 { "data": { "status": "APPROVED", "approvals": [{"role":"MANAGER",...},{"role":"IT",...}], ... } }
-PATCH {{baseUrl}}/api/access-requests/{{multi_request_id}}/decision
+### [MA-3] IT approves → expect APPROVED (all required roles covered)
+# Expected: { "data": { "decideRequest": { "status": "APPROVED", "approvals": [{"role":"MANAGER"},{"role":"IT"}] } } }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{it_token}}
 
 {
-  "decision": "APPROVED",
-  "decisionNote": "IT sign-off granted."
+  "query": "mutation Decide($id: ID!, $decision: RequestStatus!, $note: String) { decideRequest(id: $id, decision: $decision, decisionNote: $note) { id status approvals { role approvedByEmail approvedAt } } }",
+  "variables": {
+    "id": "{{multi_request_id}}",
+    "decision": "APPROVED",
+    "note": "IT sign-off granted."
+  }
 }
 
 
@@ -273,59 +320,66 @@ Authorization: Bearer {{it_token}}
 # ROLE BOUNDARY TESTS
 # =============================================================================
 
-### [RB-1] IT tries to approve an HR-only (HiBob) request → expect 403
-# Create a HiBob request first (needs HR), then try approving with IT token.
-POST {{baseUrl}}/api/access-requests
+### [RB-1] Create HiBob request (HR-only)
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "applicationName": "HiBob",
-  "justification": "Need access to update employee records for the new onboarding cohort."
+  "query": "mutation CreateRequest($app: String!, $just: String!) { createRequest(applicationName: $app, justification: $just) { id applicationName requiredApprovals } }",
+  "variables": {
+    "app": "HiBob",
+    "just": "Need access to update employee records for the new onboarding cohort."
+  }
 }
 
 > {%
-  client.global.set("hibob_request_id", response.body.data.id);
+  client.global.set("hibob_request_id", response.body.data.createRequest.id);
 %}
 
 ###
 
-### [RB-2] IT attempts to approve an HR-only request
-# Expected: 403 { "error": { "message": "Role 'IT' is not authorized to approve requests for 'HiBob'" } }
-PATCH {{baseUrl}}/api/access-requests/{{hibob_request_id}}/decision
+### [RB-2] IT tries to approve an HR-only request → expect 403
+# Expected: { "errors": [{ "message": "Role 'IT' is not authorized..." }] }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{it_token}}
 
 {
-  "decision": "APPROVED"
+  "query": "mutation Decide($id: ID!, $decision: RequestStatus!) { decideRequest(id: $id, decision: $decision) { id status } }",
+  "variables": { "id": "{{hibob_request_id}}", "decision": "APPROVED" }
 }
 
 ###
 
-### [RB-3] Create a GitHub request for the next boundary test
-POST {{baseUrl}}/api/access-requests
+### [RB-3] Create GitHub request (IT-only)
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "applicationName": "GitHub",
-  "justification": "Need access to manage code repositories for the new feature branch workflow."
+  "query": "mutation CreateRequest($app: String!, $just: String!) { createRequest(applicationName: $app, justification: $just) { id applicationName requiredApprovals } }",
+  "variables": {
+    "app": "GitHub",
+    "just": "Need access to manage code repositories for the new feature branch workflow."
+  }
 }
 
 > {%
-  client.global.set("github_request_id", response.body.data.id);
+  client.global.set("github_request_id", response.body.data.createRequest.id);
 %}
 
 ###
 
 ### [RB-4] HR tries to approve a tech (GitHub) request → expect 403
-# Expected: 403 { "error": { "message": "Role 'HR' is not authorized to approve requests for 'GitHub'" } }
-PATCH {{baseUrl}}/api/access-requests/{{github_request_id}}/decision
+# Expected: { "errors": [{ "message": "Role 'HR' is not authorized..." }] }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{hr_token}}
 
 {
-  "decision": "APPROVED"
+  "query": "mutation Decide($id: ID!, $decision: RequestStatus!) { decideRequest(id: $id, decision: $decision) { id status } }",
+  "variables": { "id": "{{github_request_id}}", "decision": "APPROVED" }
 }
 
 
@@ -333,148 +387,120 @@ Authorization: Bearer {{hr_token}}
 # ERROR & EDGE CASES
 # =============================================================================
 
-### [E1] UNAUTHORIZED — No token provided
-# Expected: 401 { "error": { "message": "Missing or malformed Authorization header..." } }
-POST {{baseUrl}}/api/access-requests
+### [E1] UNAUTHENTICATED — No token provided
+# Expected: { "errors": [{ "extensions": { "code": "UNAUTHENTICATED" } }] }
+POST {{graphqlUrl}}
 Content-Type: application/json
 
 {
-  "applicationName": "GitHub",
-  "justification": "Need access to push code."
+  "query": "mutation CreateRequest($app: String!, $just: String!) { createRequest(applicationName: $app, justification: $just) { id } }",
+  "variables": { "app": "GitHub", "just": "Need access to push code." }
 }
 
 ###
 
-### [E2] UNAUTHORIZED — Invalid / malformed token
-# Expected: 401 { "error": { "message": "Invalid or expired token" } }
-GET {{baseUrl}}/api/access-requests
+### [E2] UNAUTHENTICATED — Invalid / malformed token
+# Expected: { "errors": [{ "extensions": { "code": "UNAUTHENTICATED" } }] }
+POST {{graphqlUrl}}
+Content-Type: application/json
 Authorization: Bearer this.is.not.a.valid.token
 
-###
-
-### [E3] UNAUTHORIZED — Wrong password at login
-# Expected: 401 { "error": { "message": "Invalid credentials" } }
-POST {{baseUrl}}/api/auth/login
-Content-Type: application/json
-
 {
-  "email": "alice@company.com",
-  "password": "WrongPassword!"
+  "query": "query { allRequests { id } }"
 }
 
 ###
 
-### [E4] UNAUTHORIZED — Unknown email (same message as wrong password)
-# Expected: 401 { "error": { "message": "Invalid credentials" } }
-POST {{baseUrl}}/api/auth/login
+### [E3] Wrong password at login
+# Expected: { "errors": [{ "message": "Invalid credentials" }] }
+POST {{graphqlUrl}}
 Content-Type: application/json
 
 {
-  "email": "ghost@company.com",
-  "password": "Password123!"
+  "query": "mutation Login($email: String!, $password: String!) { login(email: $email, password: $password) { token } }",
+  "variables": { "email": "alice@company.com", "password": "WrongPassword!" }
 }
 
 ###
 
-### [E5] FORBIDDEN — Employee attempts to approve a request (permission guard)
-# Expected: 403 { "error": { "message": "Access denied: role 'EMPLOYEE' does not have permission 'access_request:decide'" } }
-PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
+### [E4] Unknown email (same message as wrong password — anti-enumeration)
+# Expected: { "errors": [{ "message": "Invalid credentials" }] }
+POST {{graphqlUrl}}
+Content-Type: application/json
+
+{
+  "query": "mutation Login($email: String!, $password: String!) { login(email: $email, password: $password) { token } }",
+  "variables": { "email": "ghost@company.com", "password": "Password123!" }
+}
+
+###
+
+### [E5] FORBIDDEN — Employee attempts to approve a request
+# Expected: { "errors": [{ "message": "Access denied: role 'EMPLOYEE' does not have permission..." }] }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "decision": "APPROVED",
-  "decisionNote": "I am approving my own request."
+  "query": "mutation Decide($id: ID!, $decision: RequestStatus!) { decideRequest(id: $id, decision: $decision) { id } }",
+  "variables": { "id": "{{request_id}}", "decision": "APPROVED" }
 }
 
 ###
 
 ### [E6] FORBIDDEN — Employee attempts to list all requests
-# Expected: 403 { "error": { "message": "Access denied: role 'EMPLOYEE' does not have permission 'access_request:view:all'" } }
-GET {{baseUrl}}/api/access-requests
+# Expected: { "errors": [{ "message": "Access denied: role 'EMPLOYEE' does not have permission..." }] }
+POST {{graphqlUrl}}
+Content-Type: application/json
 Authorization: Bearer {{auth_token}}
+
+{
+  "query": "query { allRequests { id } }"
+}
 
 ###
 
 ### [E7] FORBIDDEN — Employee attempts to view another user's requests
-# Expected: 403 { "error": { "message": "You can only view your own access requests" } }
-GET {{baseUrl}}/api/access-requests/user/user-bob-002
-Authorization: Bearer {{auth_token}}
-
-###
-
-### [E8] VALIDATION ERROR — Invalid decision value
-# Expected: 400 { "error": { "message": "Validation failed", "details": [ ... ] } }
-PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
-Content-Type: application/json
-Authorization: Bearer {{it_token}}
-
-{
-  "decision": "MAYBE"
-}
-
-###
-
-### [E9] VALIDATION ERROR — Missing required field on create
-# Expected: 400 { "error": { "message": "Validation failed", "details": [ ... ] } }
-POST {{baseUrl}}/api/access-requests
+# Expected: { "errors": [{ "message": "You can only view your own access requests" }] }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "applicationName": "Slack"
+  "query": "query MyRequests($userId: ID!) { myRequests(userId: $userId) { id } }",
+  "variables": { "userId": "user-bob-002" }
 }
 
 ###
 
-### [E10] VALIDATION ERROR — Justification too short
-# Expected: 400 { "error": { "message": "Validation failed", "details": [ ... ] } }
-POST {{baseUrl}}/api/access-requests
-Content-Type: application/json
-Authorization: Bearer {{auth_token}}
-
-{
-  "applicationName": "Slack",
-  "justification": "Need it."
-}
-
-###
-
-### [E11] VALIDATION ERROR — Invalid status in path param
-# Expected: 400 { "error": { "message": "Invalid status 'MAYBE'..." } }
-GET {{baseUrl}}/api/access-requests/status/MAYBE
-Authorization: Bearer {{it_token}}
-
-###
-
-### [E12] NOT FOUND — Request ID does not exist
-# Expected: 404 { "error": { "message": "Access request 'non-existent-id' not found" } }
-PATCH {{baseUrl}}/api/access-requests/non-existent-id/decision
+### [E8] NOT FOUND — Request ID does not exist
+# Expected: { "errors": [{ "message": "Access request 'non-existent-id' not found" }] }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{it_token}}
 
 {
-  "decision": "APPROVED"
+  "query": "mutation Decide($id: ID!, $decision: RequestStatus!) { decideRequest(id: $id, decision: $decision) { id } }",
+  "variables": { "id": "non-existent-id", "decision": "APPROVED" }
 }
 
 ###
 
-### [E13] CONFLICT — Attempting to decide on an already-decided request
-# Once a request is APPROVED or DENIED, it cannot be decided again.
-# First approve the request (step [11]), then run this.
-# Expected: 409 { "error": { "message": "Cannot decide on a request with status 'APPROVED'..." } }
-PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
+### [E9] CONFLICT — Attempting to decide on an already-decided request
+# Run step [10] first to approve, then run this.
+# Expected: { "errors": [{ "message": "Cannot decide on a request with status 'APPROVED'..." }] }
+POST {{graphqlUrl}}
 Content-Type: application/json
 Authorization: Bearer {{it_token}}
 
 {
-  "decision": "DENIED",
-  "decisionNote": "Trying to override a previous decision — should fail with 409."
+  "query": "mutation Decide($id: ID!, $decision: RequestStatus!) { decideRequest(id: $id, decision: $decision) { id } }",
+  "variables": { "id": "{{request_id}}", "decision": "DENIED" }
 }
 
 ###
 
-### [E14] NOT FOUND — Unknown route
+### [E10] NOT FOUND — Unknown route (REST 404 still works)
 # Expected: 404 { "error": { "message": "Route not found" } }
-GET {{baseUrl}}/api/does-not-exist
+GET http://localhost:3000/api/does-not-exist
 Authorization: Bearer {{auth_token}}
