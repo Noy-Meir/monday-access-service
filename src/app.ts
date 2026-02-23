@@ -2,7 +2,6 @@ import express from 'express';
 import helmet from 'helmet';
 import { container } from './container';
 import { createAuthRouter } from './routes/auth.routes';
-import { createAccessRequestRouter } from './routes/accessRequest.routes';
 import { requestLoggerMiddleware } from './middleware/requestLogger.middleware';
 import { generalRateLimiter } from './middleware/rateLimiter.middleware';
 import { errorMiddleware } from './middleware/error.middleware';
@@ -31,10 +30,7 @@ app.get('/health', (_req, res) => {
 
 // ── API Routes ────────────────────────────────────────────────────────────────
 app.use('/api/auth', createAuthRouter(container.authController));
-app.use(
-  '/api/access-requests',
-  createAccessRequestRouter(container.accessRequestController, container.authService, container.riskAssessmentController)
-);
+app.use('/api/access-requests', container.accessRequestRouter);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 app.use((_req, res) => {
