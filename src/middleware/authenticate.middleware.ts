@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthService } from '../services/AuthService';
+import { AuthService } from '../modules/auth/services/AuthService';
 
 /**
  * Factory that returns a JWT authentication middleware.

@@ -1,6 +1,6 @@
-import { RiskAssessmentAgent } from '../../src/ai/agent/RiskAssessmentAgent';
-import { IAiProvider } from '../../src/ai/providers/IAiProvider';
-import { ProviderResult, RiskAssessmentInput } from '../../src/ai/types';
+import { RiskAssessmentAgent } from '../../src/modules/ai-agent/agent/RiskAssessmentAgent';
+import { IAiProvider } from '../../src/modules/ai-agent/providers/IAiProvider';
+import { ProviderResult, RiskAssessmentInput } from '../../src/modules/ai-agent/types';
 import { AccessRequest, RequestStatus } from '../../src/models/AccessRequest';
 
 jest.mock('../../src/utils/logger', () => ({
