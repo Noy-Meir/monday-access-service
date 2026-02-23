@@ -54,11 +54,11 @@ function AppRoutes() {
           {/* Employee + Approver */}
           <Route path="dashboard" element={<DashboardPage />} />
 
-          {/* Approver only */}
+          {/* Non-employee roles only */}
           <Route
             path="admin"
             element={
-              <PrivateRoute requiredRole={Role.APPROVER}>
+              <PrivateRoute requiredRoles={[Role.MANAGER, Role.IT, Role.HR, Role.ADMIN]}>
                 <AdminPage />
               </PrivateRoute>
             }

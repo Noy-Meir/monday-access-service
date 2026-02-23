@@ -6,7 +6,7 @@ import { RequestStatus } from '../../../src/models/AccessRequest';
 // @ts-ignore
 import {
   mockEmployeePayload,
-  mockApproverPayload,
+  mockITPayload,
   mockPendingRequest,
   mockApprovedRequest,
   mockDeniedRequest,
@@ -42,7 +42,7 @@ describe('AccessRequestController', () => {
   // ── create ─────────────────────────────────────────────────────────────────
   describe('create', () => {
     const body = {
-      applicationName: 'Salesforce CRM',
+      applicationName: 'GitHub',
       justification: 'Need for Q3 campaign.',
     };
 
@@ -103,7 +103,7 @@ describe('AccessRequestController', () => {
       const req = createMockRequest({
         params: { id: mockPendingRequest.id },
         body: decisionBody,
-        user: mockApproverPayload,
+        user: mockITPayload,
       });
       const res = createMockResponse();
       const next = createMockNext();
@@ -113,7 +113,7 @@ describe('AccessRequestController', () => {
       expect(service.decide).toHaveBeenCalledWith(
         mockPendingRequest.id,
         decisionBody,
-        mockApproverPayload
+        mockITPayload
       );
     });
 
@@ -122,7 +122,7 @@ describe('AccessRequestController', () => {
       const req = createMockRequest({
         params: { id: mockPendingRequest.id },
         body: decisionBody,
-        user: mockApproverPayload,
+        user: mockITPayload,
       });
       const res = createMockResponse();
       const next = createMockNext();
@@ -137,7 +137,7 @@ describe('AccessRequestController', () => {
       const req = createMockRequest({
         params: { id: mockPendingRequest.id },
         body: { decision: RequestStatus.DENIED },
-        user: mockApproverPayload,
+        user: mockITPayload,
       });
       const res = createMockResponse();
       const next = createMockNext();
@@ -153,7 +153,7 @@ describe('AccessRequestController', () => {
       const req = createMockRequest({
         params: { id: mockApprovedRequest.id },
         body: decisionBody,
-        user: mockApproverPayload,
+        user: mockITPayload,
       });
       const res = createMockResponse();
       const next = createMockNext();
@@ -164,7 +164,7 @@ describe('AccessRequestController', () => {
     });
 
     it('calls next with AppError 403 when service throws (wrong role)', async () => {
-      const error = new AppError('Only APPROVERs can make decisions', 403);
+      const error = new AppError('Role IT is not authorized to approve this request', 403);
       service.decide.mockRejectedValue(error);
       const req = createMockRequest({
         params: { id: mockPendingRequest.id },
@@ -246,21 +246,21 @@ describe('AccessRequestController', () => {
       service.getByStatus.mockResolvedValue([mockPendingRequest]);
       const req = createMockRequest({
         params: { status: RequestStatus.PENDING },
-        user: mockApproverPayload,
+        user: mockITPayload,
       });
       const res = createMockResponse();
       const next = createMockNext();
 
       await controller.getByStatus(req, res, next);
 
-      expect(service.getByStatus).toHaveBeenCalledWith(RequestStatus.PENDING, mockApproverPayload);
+      expect(service.getByStatus).toHaveBeenCalledWith(RequestStatus.PENDING, mockITPayload);
     });
 
     it('responds with 200 and { data: requests } for a valid status', async () => {
       service.getByStatus.mockResolvedValue([mockPendingRequest]);
       const req = createMockRequest({
         params: { status: RequestStatus.PENDING },
-        user: mockApproverPayload,
+        user: mockITPayload,
       });
       const res = createMockResponse();
       const next = createMockNext();
@@ -273,7 +273,7 @@ describe('AccessRequestController', () => {
     it('calls next with AppError 400 for an unknown status value', async () => {
       const req = createMockRequest({
         params: { status: 'INVALID_STATUS' },
-        user: mockApproverPayload,
+        user: mockITPayload,
       });
       const res = createMockResponse();
       const next = createMockNext();
@@ -287,7 +287,7 @@ describe('AccessRequestController', () => {
     });
 
     it('calls next with the error when service.getByStatus throws AppError 403', async () => {
-      const error = new AppError('Only APPROVERs can filter by status', 403);
+      const error = new AppError('Only approvers can filter by status', 403);
       service.getByStatus.mockRejectedValue(error);
       const req = createMockRequest({
         params: { status: RequestStatus.PENDING },
@@ -305,28 +305,28 @@ describe('AccessRequestController', () => {
       service.getByStatus.mockResolvedValue([mockApprovedRequest]);
       const req = createMockRequest({
         params: { status: RequestStatus.APPROVED },
-        user: mockApproverPayload,
+        user: mockITPayload,
       });
       const res = createMockResponse();
       const next = createMockNext();
 
       await controller.getByStatus(req, res, next);
 
-      expect(service.getByStatus).toHaveBeenCalledWith(RequestStatus.APPROVED, mockApproverPayload);
+      expect(service.getByStatus).toHaveBeenCalledWith(RequestStatus.APPROVED, mockITPayload);
     });
 
     it('correctly handles DENIED status', async () => {
       service.getByStatus.mockResolvedValue([mockDeniedRequest]);
       const req = createMockRequest({
         params: { status: RequestStatus.DENIED },
-        user: mockApproverPayload,
+        user: mockITPayload,
       });
       const res = createMockResponse();
       const next = createMockNext();
 
       await controller.getByStatus(req, res, next);
 
-      expect(service.getByStatus).toHaveBeenCalledWith(RequestStatus.DENIED, mockApproverPayload);
+      expect(service.getByStatus).toHaveBeenCalledWith(RequestStatus.DENIED, mockITPayload);
     });
   });
 
@@ -335,19 +335,19 @@ describe('AccessRequestController', () => {
     it('calls service.getAll with req.user', async () => {
       const all = [mockPendingRequest, mockApprovedRequest, mockDeniedRequest];
       service.getAll.mockResolvedValue(all);
-      const req = createMockRequest({ user: mockApproverPayload });
+      const req = createMockRequest({ user: mockITPayload });
       const res = createMockResponse();
       const next = createMockNext();
 
       await controller.getAll(req, res, next);
 
-      expect(service.getAll).toHaveBeenCalledWith(mockApproverPayload);
+      expect(service.getAll).toHaveBeenCalledWith(mockITPayload);
     });
 
     it('responds with 200 and { data: all requests }', async () => {
       const all = [mockPendingRequest, mockApprovedRequest, mockDeniedRequest];
       service.getAll.mockResolvedValue(all);
-      const req = createMockRequest({ user: mockApproverPayload });
+      const req = createMockRequest({ user: mockITPayload });
       const res = createMockResponse();
       const next = createMockNext();
 
@@ -357,7 +357,7 @@ describe('AccessRequestController', () => {
     });
 
     it('calls next with AppError 403 when service throws (wrong role)', async () => {
-      const error = new AppError('Only APPROVERs can list all access requests', 403);
+      const error = new AppError('Only approvers can list all access requests', 403);
       service.getAll.mockRejectedValue(error);
       const req = createMockRequest({ user: mockEmployeePayload });
       const res = createMockResponse();
@@ -371,7 +371,7 @@ describe('AccessRequestController', () => {
 
     it('responds with an empty array when there are no requests', async () => {
       service.getAll.mockResolvedValue([]);
-      const req = createMockRequest({ user: mockApproverPayload });
+      const req = createMockRequest({ user: mockITPayload });
       const res = createMockResponse();
       const next = createMockNext();
 

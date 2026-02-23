@@ -4,13 +4,13 @@
 #
 # HOW TO USE:
 #   1. Start the server:  npm run dev
-#   2. Run [1] Employee Login and [2] Approver Login first to capture tokens.
+#   2. Run [1] Employee Login and [2] IT Approver Login first to capture tokens.
 #   3. Run [3] Create requests to get IDs, then update the variables below.
 #   4. Run risk assessment requests against those IDs.
 #
-# MOCK USERS (seeded at startup):
+# SEEDED USERS:
 #   alice@company.com  / Password123!  → EMPLOYEE
-#   carol@company.com  / Password123!  → APPROVER
+#   carol@company.com  / Password123!  → IT (approver)
 #
 # ENV VARIABLES (toggle the AI provider):
 #   Default (mock):   npm run dev
@@ -45,11 +45,11 @@ Content-Type: application/json
 
 
 # =============================================================================
-# [2] LOGIN — APPROVER
+# [2] LOGIN — IT APPROVER
 # =============================================================================
 
-### Login as Approver (carol)
-# Expected: 200 { "data": { "token": "...", "user": { "role": "APPROVER", ... } } }
+### Login as IT Approver (carol)
+# Expected: 200 { "data": { "token": "...", "user": { "role": "IT", ... } } }
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
@@ -60,7 +60,7 @@ Content-Type: application/json
 
 > {%
   client.global.set("admin_token", response.body.data.token);
-  client.log("Approver token captured: " + response.body.data.token.substring(0, 20) + "...");
+  client.log("IT Approver token captured: " + response.body.data.token.substring(0, 20) + "...");
 %}
 
 
@@ -71,7 +71,7 @@ Content-Type: application/json
 ### [3a] Create LOW-risk request (Employee)
 # "Slack" has no HIGH/MEDIUM keywords → mock provider returns LOW.
 # Copy the returned `id` and paste it into @low_risk_request_id above.
-# Expected: 201 { "data": { "id": "...", "status": "PENDING", ... } }
+# Expected: 201 { "data": { "id": "...", "status": "PENDING", "requiredApprovals": ["IT"], ... } }
 POST {{baseUrl}}/api/access-requests
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
@@ -89,16 +89,16 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [3b] Create HIGH-risk request (Employee)
-# "Production Database" contains the HIGH-risk keyword "production" → mock
+# "Database Access" contains the HIGH-risk keyword "database" → mock
 # provider returns HIGH (or CRITICAL depending on justification length).
 # Copy the returned `id` and paste it into @high_risk_request_id above.
-# Expected: 201 { "data": { "id": "...", "status": "PENDING", ... } }
+# Expected: 201 { "data": { "id": "...", "requiredApprovals": ["MANAGER", "IT"], ... } }
 POST {{baseUrl}}/api/access-requests
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "applicationName": "Production Database",
+  "applicationName": "Database Access",
   "justification": "Need access."
 }
 
@@ -110,13 +110,13 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [3c] Create MEDIUM-risk request (Employee)
-# "Finance Portal" contains the MEDIUM-risk keyword "finance".
+# "Jira" is a standard tech app → mock provider likely returns LOW/MEDIUM.
 POST {{baseUrl}}/api/access-requests
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "applicationName": "Finance Portal",
+  "applicationName": "Jira",
   "justification": "Need access to run end-of-quarter expense reports and budget reconciliation."
 }
 
@@ -139,7 +139,7 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [4b] Assess HIGH-risk request as Employee
-# "Production Database" with short justification → CRITICAL (score 88).
+# "Database Access" with short justification → CRITICAL (score 88).
 # Expected: 200 { "data": { "score": 88, "riskLevel": "CRITICAL", ... } }
 POST {{baseUrl}}/api/access-requests/{{high_risk_request_id}}/risk-assessment
 Authorization: Bearer {{auth_token}}
@@ -153,10 +153,10 @@ Authorization: Bearer {{auth_token}}
 
 
 # =============================================================================
-# [5] RISK ASSESSMENT — APPROVER (any request)
+# [5] RISK ASSESSMENT — IT APPROVER (any request)
 # =============================================================================
 
-### [5a] Approver assesses request
+### [5a] IT Approver assesses request
 # Expected: 200 { "data": { "score": 8, "riskLevel": "LOW", ... } }
 POST {{baseUrl}}/api/access-requests/{{low_risk_request_id}}/risk-assessment
 Authorization: Bearer {{admin_token}}

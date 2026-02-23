@@ -9,10 +9,10 @@ import type { AccessRequest } from '../types';
 type Filter = 'ALL' | RequestStatus;
 
 const filters: { value: Filter; label: string }[] = [
-  { value: RequestStatus.PENDING, label: 'Pending' },
+  { value: RequestStatus.PENDING,  label: 'Pending' },
   { value: RequestStatus.APPROVED, label: 'Approved' },
-  { value: RequestStatus.DENIED, label: 'Denied' },
-  { value: 'ALL', label: 'All' },
+  { value: RequestStatus.DENIED,   label: 'Denied' },
+  { value: 'ALL',                  label: 'All' },
 ];
 
 export function AdminPage() {
@@ -24,10 +24,19 @@ export function AdminPage() {
   const fetchRequests = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data =
-        activeFilter === 'ALL'
-          ? await requestsService.getAll()
-          : await requestsService.getByStatus(activeFilter);
+      let data: AccessRequest[];
+      if (activeFilter === 'ALL') {
+        data = await requestsService.getAll();
+      } else if (activeFilter === RequestStatus.PENDING) {
+        // Pending tab shows both PENDING and PARTIALLY_APPROVED
+        const [pending, partial] = await Promise.all([
+          requestsService.getByStatus(RequestStatus.PENDING),
+          requestsService.getByStatus(RequestStatus.PARTIALLY_APPROVED),
+        ]);
+        data = [...pending, ...partial];
+      } else {
+        data = await requestsService.getByStatus(activeFilter);
+      }
       setRequests(data);
     } catch (err) {
       showToast(extractMessage(err), 'error');
@@ -47,9 +56,12 @@ export function AdminPage() {
   // Counts for filter badges
   const counts = {
     ALL: requests.length,
-    [RequestStatus.PENDING]: requests.filter((r) => r.status === RequestStatus.PENDING).length,
+    // Pending badge counts both PENDING and PARTIALLY_APPROVED
+    [RequestStatus.PENDING]: requests.filter(
+      (r) => r.status === RequestStatus.PENDING || r.status === RequestStatus.PARTIALLY_APPROVED
+    ).length,
     [RequestStatus.APPROVED]: requests.filter((r) => r.status === RequestStatus.APPROVED).length,
-    [RequestStatus.DENIED]: requests.filter((r) => r.status === RequestStatus.DENIED).length,
+    [RequestStatus.DENIED]:   requests.filter((r) => r.status === RequestStatus.DENIED).length,
   } as Record<Filter, number>;
 
   return (

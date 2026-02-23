@@ -15,6 +15,14 @@ export enum Permission {
   ACCESS_REQUEST_DECIDE         = 'access_request:decide',
 }
 
+const APPROVER_PERMISSIONS = new Set([
+  Permission.ACCESS_REQUEST_CREATE,
+  Permission.ACCESS_REQUEST_VIEW_OWN,
+  Permission.ACCESS_REQUEST_VIEW_ALL,
+  Permission.ACCESS_REQUEST_VIEW_BY_STATUS,
+  Permission.ACCESS_REQUEST_DECIDE,
+]);
+
 /**
  * The authoritative permission matrix.
  * Maps every Role to the exact set of Permissions it is granted.
@@ -28,11 +36,8 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
     Permission.ACCESS_REQUEST_VIEW_OWN,
   ]),
 
-  [Role.APPROVER]: new Set([
-    Permission.ACCESS_REQUEST_CREATE,
-    Permission.ACCESS_REQUEST_VIEW_OWN,
-    Permission.ACCESS_REQUEST_VIEW_ALL,
-    Permission.ACCESS_REQUEST_VIEW_BY_STATUS,
-    Permission.ACCESS_REQUEST_DECIDE,
-  ]),
+  [Role.MANAGER]: APPROVER_PERMISSIONS,
+  [Role.IT]:      APPROVER_PERMISSIONS,
+  [Role.HR]:      APPROVER_PERMISSIONS,
+  [Role.ADMIN]:   APPROVER_PERMISSIONS,
 } as const;

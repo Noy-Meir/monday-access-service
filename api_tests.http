@@ -4,23 +4,25 @@
 #
 # HOW TO USE:
 #   1. Start the server:  npm run dev
-#   2. Run requests top-to-bottom (the Employee Login and Approver Login must
-#      run first — they populate {{auth_token}} and {{admin_token}}).
+#   2. Run requests top-to-bottom (Employee Login and IT Login must
+#      run first — they populate {{auth_token}} and {{it_token}}).
 #   3. After "Create Access Request", copy the returned `id` and paste it
 #      into the @request_id variable below.
 #
-# MOCK USERS (seeded at startup):
+# SEEDED USERS:
 #   alice@company.com  / Password123!  → EMPLOYEE
 #   bob@company.com    / Password123!  → EMPLOYEE
-#   carol@company.com  / Password123!  → APPROVER
-#   dave@company.com   / Password123!  → APPROVER
+#   carol@company.com  / Password123!  → IT
+#   dave@company.com   / Password123!  → HR
+#   eve@company.com    / Password123!  → MANAGER
+#   frank@company.com  / Password123!  → ADMIN
 # =============================================================================
 
 @baseUrl   = http://localhost:3000
 
 # After running "Create Access Request", paste the returned `id` here
-# so the decide/fetch-by-id requests below can reuse it without copy-pasting.
-@request_id =eb4dde67-37b0-4675-9ec3-46ae3ff6e049
+@request_id       = replace-me-with-real-id
+@multi_request_id = replace-me-with-real-id
 
 
 # =============================================================================
@@ -37,9 +39,7 @@ GET {{baseUrl}}/health
 # =============================================================================
 
 ### [1] Login as Employee (alice)
-# Captures the JWT and stores it in the global variable {{auth_token}}.
-# Run this before any other employee request.
-# Expected: 200 { "data": { "token": "...", "user": { ... } } }
+# Expected: 200 { "data": { "token": "...", "user": { "role": "EMPLOYEE", ... } } }
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
@@ -55,17 +55,15 @@ Content-Type: application/json
 
 ###
 
-### [2] Create Access Request (Employee)
-# Submits a new access request as alice. The request starts in PENDING status.
-# Copy the `id` from the response and update @request_id at the top of this file.
-# Expected: 201 { "data": { "id": "...", "status": "PENDING", "createdBy": "...", ... } }
+### [2] Create Access Request — GitHub (tech, needs IT)
+# Expected: 201 { "data": { "id": "...", "status": "PENDING", "requiredApprovals": ["IT"], ... } }
 POST {{baseUrl}}/api/access-requests
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "applicationName": "Salesforce CRM",
-  "justification": "Need access to manage enterprise customer accounts for the Q3 sales cycle."
+  "applicationName": "GitHub",
+  "justification": "Need access to manage code repositories for the upcoming Q3 development sprint."
 }
 
 > {%
@@ -76,8 +74,6 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [3] Get My Requests (Employee — own requests only)
-# Retrieves all requests belonging to alice using her user ID from the token.
-# Employees are restricted to their own requests by the service layer.
 # Expected: 200 { "data": [ ... ] }
 GET {{baseUrl}}/api/access-requests/user/user-alice-001
 Authorization: Bearer {{auth_token}}
@@ -85,20 +81,17 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [4] Get a Specific Request by ID (Employee — own request)
-# Fetches the request created in step [2] using the captured @request_id.
-# Expected: 200 { "data": { "id": "...", "status": "PENDING", ... } }
+# Expected: 200 { "data": { "id": "...", "status": "PENDING", "requiredApprovals": ["IT"], ... } }
 GET {{baseUrl}}/api/access-requests/{{request_id}}
 Authorization: Bearer {{auth_token}}
 
 
 # =============================================================================
-# APPROVER (ADMIN) WORKFLOW
+# IT APPROVER WORKFLOW
 # =============================================================================
 
-### [5] Login as Approver (carol)
-# Captures the approver JWT and stores it in the global variable {{admin_token}}.
-# Run this before any approver-only request.
-# Expected: 200 { "data": { "token": "...", "user": { "role": "APPROVER", ... } } }
+### [5] IT Login (carol)
+# Expected: 200 { "data": { "token": "...", "user": { "role": "IT", ... } } }
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
@@ -108,58 +101,104 @@ Content-Type: application/json
 }
 
 > {%
-  client.global.set("admin_token", response.body.data.token);
-  client.log("Approver token captured: " + response.body.data.token.substring(0, 20) + "...");
+  client.global.set("it_token", response.body.data.token);
+  client.log("IT token captured: " + response.body.data.token.substring(0, 20) + "...");
 %}
 
 ###
 
-### [6] Get ALL Requests (Approver only)
-# Lists every access request regardless of requester. EMPLOYEE role would get 403 here.
+### [5b] HR Login (dave)
+# Expected: 200 { "data": { "token": "...", "user": { "role": "HR", ... } } }
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "dave@company.com",
+  "password": "Password123!"
+}
+
+> {%
+  client.global.set("hr_token", response.body.data.token);
+  client.log("HR token captured: " + response.body.data.token.substring(0, 20) + "...");
+%}
+
+###
+
+### [5c] Manager Login (eve)
+# Expected: 200 { "data": { "token": "...", "user": { "role": "MANAGER", ... } } }
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "eve@company.com",
+  "password": "Password123!"
+}
+
+> {%
+  client.global.set("manager_token", response.body.data.token);
+  client.log("Manager token captured: " + response.body.data.token.substring(0, 20) + "...");
+%}
+
+###
+
+### [5d] Admin Login (frank)
+# Expected: 200 { "data": { "token": "...", "user": { "role": "ADMIN", ... } } }
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "frank@company.com",
+  "password": "Password123!"
+}
+
+> {%
+  client.global.set("admin_token", response.body.data.token);
+  client.log("Admin token captured: " + response.body.data.token.substring(0, 20) + "...");
+%}
+
+###
+
+### [6] Get ALL Requests (IT — non-employee role)
 # Expected: 200 { "data": [ ... all requests ... ] }
 GET {{baseUrl}}/api/access-requests
-Authorization: Bearer {{admin_token}}
+Authorization: Bearer {{it_token}}
 
 ###
 
-### [7] Filter Requests by Status — PENDING (Approver only)
-# Useful for an approver dashboard that only shows items that need action.
+### [7] Filter Requests by Status — PENDING
 # Expected: 200 { "data": [ ... only PENDING requests ... ] }
 GET {{baseUrl}}/api/access-requests/status/PENDING
-Authorization: Bearer {{admin_token}}
+Authorization: Bearer {{it_token}}
 
 ###
 
-### [8] Filter Requests by Status — APPROVED (Approver only)
+### [8] Filter Requests by Status — PARTIALLY_APPROVED
+# Expected: 200 { "data": [ ... only PARTIALLY_APPROVED requests ... ] }
+GET {{baseUrl}}/api/access-requests/status/PARTIALLY_APPROVED
+Authorization: Bearer {{it_token}}
+
+###
+
+### [9] Filter Requests by Status — APPROVED
 # Expected: 200 { "data": [ ... only APPROVED requests ... ] }
 GET {{baseUrl}}/api/access-requests/status/APPROVED
-Authorization: Bearer {{admin_token}}
+Authorization: Bearer {{it_token}}
 
 ###
 
-### [9] Filter Requests by Status — DENIED (Approver only)
-# Expected: 200 { "data": [ ... only DENIED requests ... ] }
-GET {{baseUrl}}/api/access-requests/status/DENIED
-Authorization: Bearer {{admin_token}}
-
-###
-
-### [10] Get Any User's Requests (Approver viewing alice's requests)
-# Approvers can query by any userId. An employee doing the same for another
-# user would receive 403 (see edge cases below).
+### [10] Get Any User's Requests (IT viewing alice's requests)
 # Expected: 200 { "data": [ ... alice's requests ... ] }
 GET {{baseUrl}}/api/access-requests/user/user-alice-001
-Authorization: Bearer {{admin_token}}
+Authorization: Bearer {{it_token}}
 
 ###
 
-### [11] APPROVE a Request (Approver only)
-# Transitions the request from PENDING → APPROVED.
-# Make sure @request_id is set (from step [2] or a seeded ID).
-# Expected: 200 { "data": { "status": "APPROVED", "decisionBy": "...", "decisionAt": "...", ... } }
+### [11] APPROVE a GitHub request (IT approving a tech request)
+# GitHub needs only IT → single approval → status becomes APPROVED immediately
+# Expected: 200 { "data": { "status": "APPROVED", "decisionBy": "...", ... } }
 PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
 Content-Type: application/json
-Authorization: Bearer {{admin_token}}
+Authorization: Bearer {{it_token}}
 
 {
   "decision": "APPROVED",
@@ -168,13 +207,12 @@ Authorization: Bearer {{admin_token}}
 
 ###
 
-### [12] DENY a Request (Approver only)
-# To test this, first create another request (re-run step [2]) and use its ID.
-# Transitions the request from PENDING → DENIED.
-# Expected: 200 { "data": { "status": "DENIED", "decisionBy": "...", "decisionAt": "...", ... } }
+### [12] DENY a Request (any authorized role)
+# First create another request (re-run step [2]) and use its ID.
+# Expected: 200 { "data": { "status": "DENIED", ... } }
 PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
 Content-Type: application/json
-Authorization: Bearer {{admin_token}}
+Authorization: Bearer {{it_token}}
 
 {
   "decision": "DENIED",
@@ -183,11 +221,119 @@ Authorization: Bearer {{admin_token}}
 
 
 # =============================================================================
+# MULTI-APPROVAL WORKFLOW (Database Access — needs MANAGER + IT)
+# =============================================================================
+
+### [MA-1] Create a Database Access request (requires MANAGER + IT)
+# Expected: 201 { "data": { "requiredApprovals": ["MANAGER", "IT"], "status": "PENDING", ... } }
+POST {{baseUrl}}/api/access-requests
+Content-Type: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "applicationName": "Database Access",
+  "justification": "Need read-only access to investigate a customer-reported data discrepancy in the orders table."
+}
+
+> {%
+  client.global.set("multi_request_id", response.body.data.id);
+  client.log("Multi-approval request ID: " + response.body.data.id);
+%}
+
+###
+
+### [MA-2] MANAGER approves → expect PARTIALLY_APPROVED
+# Only the MANAGER role has approved so far; IT still pending.
+# Expected: 200 { "data": { "status": "PARTIALLY_APPROVED", "approvals": [{"role":"MANAGER",...}], ... } }
+PATCH {{baseUrl}}/api/access-requests/{{multi_request_id}}/decision
+Content-Type: application/json
+Authorization: Bearer {{manager_token}}
+
+{
+  "decision": "APPROVED",
+  "decisionNote": "Manager sign-off granted."
+}
+
+###
+
+### [MA-3] IT approves → expect APPROVED
+# All required roles have now approved → final status is APPROVED.
+# Expected: 200 { "data": { "status": "APPROVED", "approvals": [{"role":"MANAGER",...},{"role":"IT",...}], ... } }
+PATCH {{baseUrl}}/api/access-requests/{{multi_request_id}}/decision
+Content-Type: application/json
+Authorization: Bearer {{it_token}}
+
+{
+  "decision": "APPROVED",
+  "decisionNote": "IT sign-off granted."
+}
+
+
+# =============================================================================
+# ROLE BOUNDARY TESTS
+# =============================================================================
+
+### [RB-1] IT tries to approve an HR-only (HiBob) request → expect 403
+# Create a HiBob request first (needs HR), then try approving with IT token.
+POST {{baseUrl}}/api/access-requests
+Content-Type: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "applicationName": "HiBob",
+  "justification": "Need access to update employee records for the new onboarding cohort."
+}
+
+> {%
+  client.global.set("hibob_request_id", response.body.data.id);
+%}
+
+###
+
+### [RB-2] IT attempts to approve an HR-only request
+# Expected: 403 { "error": { "message": "Role 'IT' is not authorized to approve requests for 'HiBob'" } }
+PATCH {{baseUrl}}/api/access-requests/{{hibob_request_id}}/decision
+Content-Type: application/json
+Authorization: Bearer {{it_token}}
+
+{
+  "decision": "APPROVED"
+}
+
+###
+
+### [RB-3] Create a GitHub request for the next boundary test
+POST {{baseUrl}}/api/access-requests
+Content-Type: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "applicationName": "GitHub",
+  "justification": "Need access to manage code repositories for the new feature branch workflow."
+}
+
+> {%
+  client.global.set("github_request_id", response.body.data.id);
+%}
+
+###
+
+### [RB-4] HR tries to approve a tech (GitHub) request → expect 403
+# Expected: 403 { "error": { "message": "Role 'HR' is not authorized to approve requests for 'GitHub'" } }
+PATCH {{baseUrl}}/api/access-requests/{{github_request_id}}/decision
+Content-Type: application/json
+Authorization: Bearer {{hr_token}}
+
+{
+  "decision": "APPROVED"
+}
+
+
+# =============================================================================
 # ERROR & EDGE CASES
 # =============================================================================
 
 ### [E1] UNAUTHORIZED — No token provided
-# Hitting a protected endpoint with no Authorization header.
 # Expected: 401 { "error": { "message": "Missing or malformed Authorization header..." } }
 POST {{baseUrl}}/api/access-requests
 Content-Type: application/json
@@ -200,7 +346,6 @@ Content-Type: application/json
 ###
 
 ### [E2] UNAUTHORIZED — Invalid / malformed token
-# A garbage token should be rejected by the JWT verification middleware.
 # Expected: 401 { "error": { "message": "Invalid or expired token" } }
 GET {{baseUrl}}/api/access-requests
 Authorization: Bearer this.is.not.a.valid.token
@@ -208,8 +353,6 @@ Authorization: Bearer this.is.not.a.valid.token
 ###
 
 ### [E3] UNAUTHORIZED — Wrong password at login
-# Both "wrong password" and "unknown email" return the same message
-# to prevent user enumeration attacks.
 # Expected: 401 { "error": { "message": "Invalid credentials" } }
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
@@ -234,9 +377,6 @@ Content-Type: application/json
 ###
 
 ### [E5] FORBIDDEN — Employee attempts to approve a request (permission guard)
-# The PATCH /decision endpoint requires the access_request:decide permission.
-# An EMPLOYEE token hits the authorize middleware and is rejected before
-# reaching the service layer.
 # Expected: 403 { "error": { "message": "Access denied: role 'EMPLOYEE' does not have permission 'access_request:decide'" } }
 PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
 Content-Type: application/json
@@ -250,7 +390,6 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [E6] FORBIDDEN — Employee attempts to list all requests
-# GET /api/access-requests requires the access_request:view:all permission.
 # Expected: 403 { "error": { "message": "Access denied: role 'EMPLOYEE' does not have permission 'access_request:view:all'" } }
 GET {{baseUrl}}/api/access-requests
 Authorization: Bearer {{auth_token}}
@@ -258,7 +397,6 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [E7] FORBIDDEN — Employee attempts to view another user's requests
-# Employees lack access_request:view:all, so the service rejects cross-user queries.
 # Expected: 403 { "error": { "message": "You can only view your own access requests" } }
 GET {{baseUrl}}/api/access-requests/user/user-bob-002
 Authorization: Bearer {{auth_token}}
@@ -266,12 +404,10 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [E8] VALIDATION ERROR — Invalid decision value
-# The `decision` field only accepts "APPROVED" or "DENIED".
-# Sending anything else fails Zod schema validation before the service is called.
 # Expected: 400 { "error": { "message": "Validation failed", "details": [ ... ] } }
 PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
 Content-Type: application/json
-Authorization: Bearer {{admin_token}}
+Authorization: Bearer {{it_token}}
 
 {
   "decision": "MAYBE"
@@ -280,7 +416,6 @@ Authorization: Bearer {{admin_token}}
 ###
 
 ### [E9] VALIDATION ERROR — Missing required field on create
-# `justification` is required and must be at least 10 characters.
 # Expected: 400 { "error": { "message": "Validation failed", "details": [ ... ] } }
 POST {{baseUrl}}/api/access-requests
 Content-Type: application/json
@@ -293,7 +428,6 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [E10] VALIDATION ERROR — Justification too short
-# `justification` must be at least 10 characters.
 # Expected: 400 { "error": { "message": "Validation failed", "details": [ ... ] } }
 POST {{baseUrl}}/api/access-requests
 Content-Type: application/json
@@ -307,10 +441,9 @@ Authorization: Bearer {{auth_token}}
 ###
 
 ### [E11] VALIDATION ERROR — Invalid status in path param
-# The controller validates path param status before calling the service.
 # Expected: 400 { "error": { "message": "Invalid status 'MAYBE'..." } }
 GET {{baseUrl}}/api/access-requests/status/MAYBE
-Authorization: Bearer {{admin_token}}
+Authorization: Bearer {{it_token}}
 
 ###
 
@@ -318,7 +451,7 @@ Authorization: Bearer {{admin_token}}
 # Expected: 404 { "error": { "message": "Access request 'non-existent-id' not found" } }
 PATCH {{baseUrl}}/api/access-requests/non-existent-id/decision
 Content-Type: application/json
-Authorization: Bearer {{admin_token}}
+Authorization: Bearer {{it_token}}
 
 {
   "decision": "APPROVED"
@@ -332,7 +465,7 @@ Authorization: Bearer {{admin_token}}
 # Expected: 409 { "error": { "message": "Cannot decide on a request with status 'APPROVED'..." } }
 PATCH {{baseUrl}}/api/access-requests/{{request_id}}/decision
 Content-Type: application/json
-Authorization: Bearer {{admin_token}}
+Authorization: Bearer {{it_token}}
 
 {
   "decision": "DENIED",
@@ -342,7 +475,6 @@ Authorization: Bearer {{admin_token}}
 ###
 
 ### [E14] NOT FOUND — Unknown route
-# Any path not registered by the app returns a structured 404.
 # Expected: 404 { "error": { "message": "Route not found" } }
 GET {{baseUrl}}/api/does-not-exist
 Authorization: Bearer {{auth_token}}
