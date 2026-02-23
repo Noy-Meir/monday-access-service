@@ -1,7 +1,16 @@
-import { api } from './api';
+import { apolloClient } from '../graphql/apolloClient';
+import {
+  MY_REQUESTS_QUERY,
+  ALL_REQUESTS_QUERY,
+  REQUESTS_BY_STATUS_QUERY,
+  RISK_ASSESSMENT_QUERY,
+} from '../graphql/queries';
+import {
+  CREATE_REQUEST_MUTATION,
+  DECIDE_REQUEST_MUTATION,
+} from '../graphql/mutations';
 import type {
   AccessRequest,
-  ApiResponse,
   CreateRequestPayload,
   DecisionPayload,
   RiskAssessmentResult,
@@ -9,41 +18,54 @@ import type {
 
 export const requestsService = {
   async create(payload: CreateRequestPayload): Promise<AccessRequest> {
-    const { data } = await api.post<ApiResponse<AccessRequest>>('/api/access-requests', payload);
-    return data.data;
+    const { data } = await apolloClient.mutate({
+      mutation: CREATE_REQUEST_MUTATION,
+      variables: {
+        applicationName: payload.applicationName,
+        justification: payload.justification,
+      },
+    });
+    return data.createRequest;
   },
 
   async getMyRequests(userId: string): Promise<AccessRequest[]> {
-    const { data } = await api.get<ApiResponse<AccessRequest[]>>(
-      `/api/access-requests/user/${userId}`
-    );
-    return data.data;
+    const { data } = await apolloClient.query({
+      query: MY_REQUESTS_QUERY,
+      variables: { userId },
+    });
+    return data.myRequests;
   },
 
   async getAll(): Promise<AccessRequest[]> {
-    const { data } = await api.get<ApiResponse<AccessRequest[]>>('/api/access-requests');
-    return data.data;
+    const { data } = await apolloClient.query({ query: ALL_REQUESTS_QUERY });
+    return data.allRequests;
   },
 
   async getByStatus(status: string): Promise<AccessRequest[]> {
-    const { data } = await api.get<ApiResponse<AccessRequest[]>>(
-      `/api/access-requests/status/${status}`
-    );
-    return data.data;
+    const { data } = await apolloClient.query({
+      query: REQUESTS_BY_STATUS_QUERY,
+      variables: { status },
+    });
+    return data.requestsByStatus;
   },
 
   async decide(id: string, payload: DecisionPayload): Promise<AccessRequest> {
-    const { data } = await api.patch<ApiResponse<AccessRequest>>(
-      `/api/access-requests/${id}/decision`,
-      payload
-    );
-    return data.data;
+    const { data } = await apolloClient.mutate({
+      mutation: DECIDE_REQUEST_MUTATION,
+      variables: {
+        id,
+        decision: payload.decision,
+        decisionNote: payload.decisionNote,
+      },
+    });
+    return data.decideRequest;
   },
 
   async getRiskAssessment(id: string): Promise<RiskAssessmentResult> {
-    const { data } = await api.post<ApiResponse<RiskAssessmentResult>>(
-      `/api/access-requests/${id}/risk-assessment`
-    );
-    return data.data;
+    const { data } = await apolloClient.query({
+      query: RISK_ASSESSMENT_QUERY,
+      variables: { requestId: id },
+    });
+    return data.riskAssessment;
   },
 };

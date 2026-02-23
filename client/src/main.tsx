@@ -1,13 +1,17 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { ApolloProvider } from '@apollo/client';
 import './index.css';
 import App from './App';
+import { apolloClient } from './graphql/apolloClient';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element not found');
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <ApolloProvider client={apolloClient}>
+      <App />
+    </ApolloProvider>
   </StrictMode>
 );
