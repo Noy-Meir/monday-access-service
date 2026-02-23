@@ -8,9 +8,6 @@ import { InMemoryAccessRequestRepository } from './repositories/InMemoryAccessRe
 import { AuthService } from './services/AuthService';
 import { AuthorizationService } from './services/AuthorizationService';
 import { AccessRequestService } from './services/AccessRequestService';
-import { AccessRequestController } from './controllers/AccessRequestController';
-import { AuthController } from './controllers/AuthController';
-import { RiskAssessmentController } from './controllers/RiskAssessmentController';
 import { IAiProvider } from './modules/ai-agent/providers/IAiProvider';
 import { MockAiProvider } from './modules/ai-agent/providers/MockAiProvider';
 import { ClaudeAiProvider } from './modules/ai-agent/providers/ClaudeAiProvider';
@@ -41,18 +38,10 @@ function createAiProvider(): IAiProvider {
 
 const riskAssessmentAgent = new RiskAssessmentAgent(createAiProvider());
 
-// ── Controllers ───────────────────────────────────────────────────────────────
-const accessRequestController = new AccessRequestController(accessRequestService);
-const authController = new AuthController(authService);
-const riskAssessmentController = new RiskAssessmentController(accessRequestService, riskAssessmentAgent);
-
 export const container = {
   accessRequestRepository,
   authService,
   authorizationService,
   accessRequestService,
   riskAssessmentAgent,
-  accessRequestController,
-  authController,
-  riskAssessmentController,
 } as const;
