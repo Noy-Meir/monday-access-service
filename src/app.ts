@@ -5,7 +5,6 @@ import { createAuthRouter } from './routes/auth.routes';
 import { createAccessRequestRouter } from './routes/accessRequest.routes';
 import { requestLoggerMiddleware } from './middleware/requestLogger.middleware';
 import { generalRateLimiter } from './middleware/rateLimiter.middleware';
-import { errorMiddleware } from './middleware/error.middleware';
 import cors from 'cors';
 
 const app = express();
@@ -27,9 +26,6 @@ app.use(requestLoggerMiddleware);
 
 app.use(cors());
 
-app.use(express.json());
-
-
 // ── Health Check (no auth required) ──────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -42,12 +38,8 @@ app.use(
   createAccessRequestRouter(container.accessRequestController, container.authService, container.riskAssessmentController)
 );
 
-// ── 404 Handler ───────────────────────────────────────────────────────────────
-app.use((_req, res) => {
-  res.status(404).json({ error: { message: 'Route not found' } });
-});
-
-// ── Global Error Handler (must be registered last) ────────────────────────────
-app.use(errorMiddleware);
+// NOTE: The 404 handler and global error handler are intentionally registered
+// in src/index.ts (after the async GraphQL middleware is added) so that
+// /graphql is reachable before the catch-all fires.
 
 export default app;

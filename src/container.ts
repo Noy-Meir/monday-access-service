@@ -51,6 +51,7 @@ export const container = {
   authService,
   authorizationService,
   accessRequestService,
+  riskAssessmentAgent,
   accessRequestController,
   authController,
   riskAssessmentController,

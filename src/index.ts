@@ -1,13 +1,96 @@
 import { Server } from 'http';
+import { ApolloServer, HeaderMap } from '@apollo/server';
+import type { Request, Response, NextFunction } from 'express';
 import app from './app';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { seedData } from './seed';
 import { container } from './container';
+import { typeDefs } from './graphql/typeDefs';
+import { resolvers } from './graphql/resolvers';
+import { errorMiddleware } from './middleware/error.middleware';
+import type { GraphQLContext } from './graphql/context';
 
 async function bootstrap(): Promise<void> {
   // Populate in-memory store before the server starts accepting connections
   await seedData(container.authService, container.accessRequestRepository);
+
+  // ── GraphQL / Apollo Server ─────────────────────────────────────────────
+  const apolloServer = new ApolloServer<GraphQLContext>({ typeDefs, resolvers });
+  await apolloServer.start();
+
+  // Manual Express handler — equivalent to expressMiddleware() from
+  // @apollo/server/express4, but avoids the ESM/CJS interop issue that arises
+  // when tsx (CJS mode) tries to require() an "type":"module" subpath package.
+  app.use('/graphql', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // ── Build context (JWT extraction) ────────────────────────────────────
+      const authHeader = req.headers.authorization;
+      let actor: GraphQLContext['actor'] = null;
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        try {
+          actor = container.authService.verifyToken(token);
+        } catch {
+          // Invalid token — actor stays null; resolvers that need auth will throw.
+        }
+      }
+
+      // ── Convert Express request headers to Apollo HeaderMap ───────────────
+      const headers = new HeaderMap();
+      for (const [key, value] of Object.entries(req.headers)) {
+        if (value !== undefined) {
+          headers.set(key, Array.isArray(value) ? value.join(', ') : value);
+        }
+      }
+
+      // ── Query string ──────────────────────────────────────────────────────
+      const reqUrl = req.url ?? '/';
+      const searchIndex = reqUrl.indexOf('?');
+      const search = searchIndex !== -1 ? reqUrl.slice(searchIndex) : '';
+
+      // ── Execute ───────────────────────────────────────────────────────────
+      const result = await apolloServer.executeHTTPGraphQLRequest({
+        httpGraphQLRequest: {
+          method: req.method.toUpperCase(),
+          headers,
+          search,
+          body: req.body,
+        },
+        context: async () => ({
+          actor,
+          accessRequestService: container.accessRequestService,
+          authService: container.authService,
+          riskAssessmentAgent: container.riskAssessmentAgent,
+        }),
+      });
+
+      // ── Send response ─────────────────────────────────────────────────────
+      for (const [key, value] of result.headers) {
+        res.setHeader(key, value);
+      }
+      res.statusCode = result.status ?? 200;
+
+      if (result.body.kind === 'complete') {
+        res.send(result.body.string);
+      } else {
+        for await (const chunk of result.body.asyncIterator) {
+          res.write(chunk);
+        }
+        res.end();
+      }
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  logger.info('GraphQL endpoint ready', { path: '/graphql' });
+
+  // ── 404 + Error handlers (must come after all routes, including /graphql) ──
+  app.use((_req: Request, res: Response) => {
+    res.status(404).json({ error: { message: 'Route not found' } });
+  });
+  app.use(errorMiddleware);
 
   const server: Server = app.listen(config.port, () => {
     logger.info('monday-access-service started', {

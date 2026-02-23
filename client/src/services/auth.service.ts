@@ -1,9 +1,13 @@
-import { api } from './api';
-import type { LoginResponse, User } from '../types';
+import { apolloClient } from '../graphql/apolloClient';
+import { LOGIN_MUTATION } from '../graphql/mutations';
+import type { User } from '../types';
 
 export const authService = {
   async login(email: string, password: string): Promise<{ token: string; user: User }> {
-    const { data } = await api.post<LoginResponse>('/api/auth/login', { email, password });
-    return data.data;
+    const { data } = await apolloClient.mutate({
+      mutation: LOGIN_MUTATION,
+      variables: { email, password },
+    });
+    return data.login;
   },
 };
