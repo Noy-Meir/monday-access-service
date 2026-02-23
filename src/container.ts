@@ -22,7 +22,7 @@ const accessRequestRepository = new InMemoryAccessRequestRepository();
 // AuthService owns the user Map; seedData() populates it via registerUser().
 const authService = new AuthService(new Map());
 const authorizationService = new AuthorizationService();
-const accessRequestService = new AccessRequestService(accessRequestRepository, authorizationService);
+const accessRequestService = new AccessRequestService(accessRequestRepository);
 
 // ── AI ────────────────────────────────────────────────────────────────────────
 function createAiProvider(): IAiProvider {
