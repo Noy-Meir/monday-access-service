@@ -1,13 +1,26 @@
 import express from 'express';
+import helmet from 'helmet';
 import { container } from './container';
 import { createAuthRouter } from './routes/auth.routes';
 import { createAccessRequestRouter } from './routes/accessRequest.routes';
 import { requestLoggerMiddleware } from './middleware/requestLogger.middleware';
+import { generalRateLimiter } from './middleware/rateLimiter.middleware';
 import { errorMiddleware } from './middleware/error.middleware';
 
 const app = express();
 
-// ── Global Middleware ─────────────────────────────────────────────────────────
+// ── Security Headers ──────────────────────────────────────────────────────────
+// Helmet sets ~15 HTTP response headers in one call (X-Frame-Options,
+// Content-Security-Policy, X-Content-Type-Options, etc.).
+// Applied first so every response — including error responses — carries them.
+app.use(helmet());
+
+// ── Global Rate Limiter ───────────────────────────────────────────────────────
+// Applied before route handlers so even 404 paths consume quota.
+// Stricter per-endpoint limiters are registered directly on their routes.
+app.use(generalRateLimiter);
+
+// ── Body Parsing & Observability ──────────────────────────────────────────────
 app.use(express.json());
 app.use(requestLoggerMiddleware);
 

@@ -4,6 +4,7 @@ import { AuthService } from '../services/AuthService';
 import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
 import { createAuthorizeMiddleware } from '../middleware/authorize.middleware';
 import { createValidateMiddleware } from '../middleware/validate.middleware';
+import { createRequestRateLimiter } from '../middleware/rateLimiter.middleware';
 import { createAccessRequestSchema } from '../validators/createAccessRequest.schema';
 import { decideAccessRequestSchema } from '../validators/decideAccessRequest.schema';
 import { Permission } from '../models/Permission';
@@ -18,9 +19,10 @@ export function createAccessRequestRouter(
   // All routes in this router require a valid JWT
   router.use(authenticate);
 
-  // Any authenticated user can submit a request
+  // createRequestRateLimiter: 30 submissions / 15 min — prevents approval-queue spam.
   router.post(
     '/',
+    createRequestRateLimiter,
     createValidateMiddleware(createAccessRequestSchema),
     controller.create
   );
