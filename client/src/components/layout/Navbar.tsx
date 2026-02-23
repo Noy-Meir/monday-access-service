@@ -3,23 +3,20 @@ import { useAuth } from '../../hooks/useAuth';
 import { Role } from '../../types';
 
 const rolePill: Record<Role, { label: string; classes: string }> = {
-  [Role.APPROVER]: {
-    label: 'Approver',
-    classes: 'bg-indigo-100 text-indigo-700',
-  },
-  [Role.EMPLOYEE]: {
-    label: 'Employee',
-    classes: 'bg-gray-100 text-gray-600',
-  },
+  [Role.EMPLOYEE]: { label: 'Employee', classes: 'bg-gray-100 text-gray-600' },
+  [Role.MANAGER]:  { label: 'Manager',  classes: 'bg-blue-100 text-blue-700' },
+  [Role.IT]:       { label: 'IT',       classes: 'bg-indigo-100 text-indigo-700' },
+  [Role.HR]:       { label: 'HR',       classes: 'bg-purple-100 text-purple-700' },
+  [Role.ADMIN]:    { label: 'Admin',    classes: 'bg-rose-100 text-rose-700' },
 };
 
 export function Navbar() {
-  const { user, logout, isApprover } = useAuth();
+  const { user, logout, canApprove } = useAuth();
   const location = useLocation();
 
   const navLinks = [
     { to: '/dashboard', label: 'My Requests', show: true },
-    { to: '/admin', label: 'Admin Panel', show: isApprover },
+    { to: '/admin', label: 'Admin Panel', show: canApprove },
   ];
 
   const isActive = (to: string) => location.pathname === to;
@@ -68,9 +65,9 @@ export function Navbar() {
             <div className="hidden sm:flex flex-col items-end leading-none">
               <span className="text-sm font-medium text-gray-900">{user.name}</span>
               <span
-                className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${rolePill[user.role].classes}`}
+                className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${(rolePill[user.role] ?? rolePill[Role.EMPLOYEE]).classes}`}
               >
-                {rolePill[user.role].label}
+                {(rolePill[user.role] ?? { label: user.role }).label}
               </span>
             </div>
             <button

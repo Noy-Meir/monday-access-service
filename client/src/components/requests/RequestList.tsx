@@ -56,7 +56,8 @@ export function RequestList({ newRequest }: RequestListProps) {
 
   const counts: Record<Filter, number> = {
     ALL: requests.length,
-    [RequestStatus.PENDING]: requests.filter((r) => r.status === RequestStatus.PENDING).length,
+    [RequestStatus.PENDING]: requests.filter((r) => r.status === RequestStatus.PENDING || r.status === RequestStatus.PARTIALLY_APPROVED).length,
+    [RequestStatus.PARTIALLY_APPROVED]: requests.filter((r) => r.status === RequestStatus.PARTIALLY_APPROVED).length,
     [RequestStatus.APPROVED]: requests.filter((r) => r.status === RequestStatus.APPROVED).length,
     [RequestStatus.DENIED]: requests.filter((r) => r.status === RequestStatus.DENIED).length,
   };

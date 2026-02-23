@@ -1,4 +1,4 @@
-import { AuthService } from '../../../src/modules/auth/services/AuthService';
+import { AuthService } from '../../../src/services/AuthService';
 import { AppError } from '../../../src/utils/AppError';
 import { Role, User } from '../../../src/models/AccessRequest';
 import { mockUser } from '../../helpers/fixtures';

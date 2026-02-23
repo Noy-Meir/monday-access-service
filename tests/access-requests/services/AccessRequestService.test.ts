@@ -1,15 +1,20 @@
-import { AccessRequestService } from '../../../src/modules/access-requests/services/AccessRequestService';
-import { AuthorizationService } from '../../../src/modules/auth/services/AuthorizationService';
-import { IAccessRequestRepository } from '../../../src/modules/access-requests/repositories/IAccessRequestRepository';
+import { AccessRequestService } from '../../../src/services/AccessRequestService';
+import { AuthorizationService } from '../../../src/services/AuthorizationService';
+import { IAccessRequestRepository } from '../../../src/repositories/IAccessRequestRepository';
 import { AppError } from '../../../src/utils/AppError';
 import { RequestStatus, Role } from '../../../src/models/AccessRequest';
 import { Permission } from '../../../src/models/Permission';
 import {
   mockEmployeePayload,
-  mockApproverPayload,
+  mockITPayload,
+  mockManagerPayload,
+  mockHRPayload,
+  mockAdminPayload,
   mockPendingRequest,
   mockApprovedRequest,
   mockDeniedRequest,
+  mockMultiApprovalRequest,
+  mockPartiallyApprovedRequest,
 } from '../../helpers/fixtures';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -38,14 +43,13 @@ describe('AccessRequestService', () => {
   beforeEach(() => {
     repository = buildMockRepository();
     // Use a real AuthorizationService — it is stateless and has no external deps.
-    // This exercises the full permission matrix rather than hiding it behind a mock.
     service = new AccessRequestService(repository, new AuthorizationService());
   });
 
   // ── create ─────────────────────────────────────────────────────────────────
   describe('create', () => {
     const input = {
-      applicationName: 'Salesforce CRM',
+      applicationName: 'GitHub',
       justification: 'Need access for Q3 campaign management.',
     };
 
@@ -112,35 +116,115 @@ describe('AccessRequestService', () => {
 
       expect(result).toBe(mockPendingRequest);
     });
+
+    it('sets requiredApprovals to [IT] for a known tech app (GitHub)', async () => {
+      repository.save.mockResolvedValue(mockPendingRequest);
+
+      await service.create({ applicationName: 'GitHub', justification: 'Need access.' }, mockEmployeePayload);
+
+      expect(repository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ requiredApprovals: [Role.IT] })
+      );
+    });
+
+    it('sets requiredApprovals to [ADMIN] for an unknown app name', async () => {
+      repository.save.mockResolvedValue(mockPendingRequest);
+
+      await service.create({ applicationName: 'UnknownApp123', justification: 'Need access.' }, mockEmployeePayload);
+
+      expect(repository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ requiredApprovals: [Role.ADMIN] })
+      );
+    });
+
+    it('initialises approvals as an empty array', async () => {
+      repository.save.mockResolvedValue(mockPendingRequest);
+
+      await service.create(input, mockEmployeePayload);
+
+      expect(repository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ approvals: [] })
+      );
+    });
   });
 
   // ── decide ─────────────────────────────────────────────────────────────────
   describe('decide', () => {
-    it('approves a PENDING request and persists correct audit fields', async () => {
+    it('IT approves a [IT]-only request → immediately APPROVED', async () => {
       const approved = { ...mockPendingRequest, status: RequestStatus.APPROVED };
       repository.findById.mockResolvedValue(mockPendingRequest);
       repository.update.mockResolvedValue(approved);
 
       const result = await service.decide(
         mockPendingRequest.id,
+        { decision: RequestStatus.APPROVED },
+        mockITPayload
+      );
+
+      expect(repository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: RequestStatus.APPROVED })
+      );
+      expect(result).toEqual(approved);
+    });
+
+    it('IT approves a [IT]-only request and persists correct audit fields', async () => {
+      const approved = { ...mockPendingRequest, status: RequestStatus.APPROVED };
+      repository.findById.mockResolvedValue(mockPendingRequest);
+      repository.update.mockResolvedValue(approved);
+
+      await service.decide(
+        mockPendingRequest.id,
         { decision: RequestStatus.APPROVED, decisionNote: 'Looks good.' },
-        mockApproverPayload
+        mockITPayload
       );
 
       expect(repository.update).toHaveBeenCalledWith(
         expect.objectContaining({
           id: mockPendingRequest.id,
           status: RequestStatus.APPROVED,
-          decisionBy: mockApproverPayload.sub,
-          decisionByEmail: mockApproverPayload.email,
+          decisionBy: mockITPayload.sub,
+          decisionByEmail: mockITPayload.email,
           decisionNote: 'Looks good.',
           decisionAt: expect.any(Date),
         })
       );
-      expect(result).toEqual(approved);
     });
 
-    it('denies a PENDING request', async () => {
+    it('MANAGER approves a [MANAGER, IT] request → PARTIALLY_APPROVED', async () => {
+      const partial = { ...mockMultiApprovalRequest, status: RequestStatus.PARTIALLY_APPROVED };
+      repository.findById.mockResolvedValue(mockMultiApprovalRequest);
+      repository.update.mockResolvedValue(partial);
+
+      const result = await service.decide(
+        mockMultiApprovalRequest.id,
+        { decision: RequestStatus.APPROVED },
+        mockManagerPayload
+      );
+
+      expect(repository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: RequestStatus.PARTIALLY_APPROVED })
+      );
+      expect(result).toEqual(partial);
+    });
+
+    it('IT approves a [MANAGER, IT] request that MANAGER already approved → APPROVED', async () => {
+      const fullyApproved = { ...mockPartiallyApprovedRequest, status: RequestStatus.APPROVED };
+      repository.findById.mockResolvedValue(mockPartiallyApprovedRequest);
+      repository.update.mockResolvedValue(fullyApproved);
+
+      const result = await service.decide(
+        mockPartiallyApprovedRequest.id,
+        { decision: RequestStatus.APPROVED },
+        mockITPayload
+      );
+
+      expect(repository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: RequestStatus.APPROVED })
+      );
+      expect(result).toEqual(fullyApproved);
+    });
+
+    it('denies a PENDING request immediately regardless of role', async () => {
       const denied = { ...mockPendingRequest, status: RequestStatus.DENIED };
       repository.findById.mockResolvedValue(mockPendingRequest);
       repository.update.mockResolvedValue(denied);
@@ -148,13 +232,48 @@ describe('AccessRequestService', () => {
       const result = await service.decide(
         mockPendingRequest.id,
         { decision: RequestStatus.DENIED, decisionNote: 'Not justified.' },
-        mockApproverPayload
+        mockITPayload
       );
 
       expect(repository.update).toHaveBeenCalledWith(
         expect.objectContaining({ status: RequestStatus.DENIED })
       );
       expect(result).toEqual(denied);
+    });
+
+    it('denies a PARTIALLY_APPROVED request', async () => {
+      const denied = { ...mockPartiallyApprovedRequest, status: RequestStatus.DENIED };
+      repository.findById.mockResolvedValue(mockPartiallyApprovedRequest);
+      repository.update.mockResolvedValue(denied);
+
+      const result = await service.decide(
+        mockPartiallyApprovedRequest.id,
+        { decision: RequestStatus.DENIED },
+        mockITPayload
+      );
+
+      expect(repository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: RequestStatus.DENIED })
+      );
+      expect(result).toEqual(denied);
+    });
+
+    it('ADMIN approves any request → immediate APPROVED override', async () => {
+      // Even a [MANAGER, IT] request gets immediately approved by ADMIN
+      const approved = { ...mockMultiApprovalRequest, status: RequestStatus.APPROVED };
+      repository.findById.mockResolvedValue(mockMultiApprovalRequest);
+      repository.update.mockResolvedValue(approved);
+
+      const result = await service.decide(
+        mockMultiApprovalRequest.id,
+        { decision: RequestStatus.APPROVED },
+        mockAdminPayload
+      );
+
+      expect(repository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: RequestStatus.APPROVED })
+      );
+      expect(result).toEqual(approved);
     });
 
     it('persists optional decisionNote when provided', async () => {
@@ -164,7 +283,7 @@ describe('AccessRequestService', () => {
       await service.decide(
         mockPendingRequest.id,
         { decision: RequestStatus.APPROVED, decisionNote: 'My note' },
-        mockApproverPayload
+        mockITPayload
       );
 
       expect(repository.update).toHaveBeenCalledWith(
@@ -179,7 +298,7 @@ describe('AccessRequestService', () => {
       await service.decide(
         mockPendingRequest.id,
         { decision: RequestStatus.APPROVED },
-        mockApproverPayload
+        mockITPayload
       );
 
       expect(repository.update).toHaveBeenCalledWith(
@@ -198,11 +317,42 @@ describe('AccessRequestService', () => {
       );
     });
 
+    it('throws AppError 403 when IT tries to approve an [HR]-only request', async () => {
+      const hrRequest = {
+        ...mockPendingRequest,
+        id: 'req-hr-001',
+        applicationName: 'HiBob',
+        requiredApprovals: [Role.HR],
+      };
+      repository.findById.mockResolvedValue(hrRequest);
+
+      await expect(
+        service.decide(hrRequest.id, { decision: RequestStatus.APPROVED }, mockITPayload)
+      ).rejects.toThrow(expect.objectContaining({ statusCode: 403 }));
+    });
+
+    it('throws AppError 403 when HR tries to approve a [IT]-only tech request', async () => {
+      repository.findById.mockResolvedValue(mockPendingRequest); // requiredApprovals: [Role.IT]
+
+      await expect(
+        service.decide(mockPendingRequest.id, { decision: RequestStatus.APPROVED }, mockHRPayload)
+      ).rejects.toThrow(expect.objectContaining({ statusCode: 403 }));
+    });
+
+    it('throws AppError 409 when the same role tries to approve twice', async () => {
+      // MANAGER has already approved in mockPartiallyApprovedRequest
+      repository.findById.mockResolvedValue(mockPartiallyApprovedRequest);
+
+      await expect(
+        service.decide(mockPartiallyApprovedRequest.id, { decision: RequestStatus.APPROVED }, mockManagerPayload)
+      ).rejects.toThrow(expect.objectContaining({ statusCode: 409 }));
+    });
+
     it('throws AppError 404 when the request does not exist', async () => {
       repository.findById.mockResolvedValue(null);
 
       await expect(
-        service.decide('non-existent-id', { decision: RequestStatus.APPROVED }, mockApproverPayload)
+        service.decide('non-existent-id', { decision: RequestStatus.APPROVED }, mockITPayload)
       ).rejects.toThrow(expect.objectContaining({ statusCode: 404 }));
     });
 
@@ -210,7 +360,7 @@ describe('AccessRequestService', () => {
       repository.findById.mockResolvedValue(mockApprovedRequest);
 
       await expect(
-        service.decide(mockApprovedRequest.id, { decision: RequestStatus.DENIED }, mockApproverPayload)
+        service.decide(mockApprovedRequest.id, { decision: RequestStatus.DENIED }, mockITPayload)
       ).rejects.toThrow(expect.objectContaining({ statusCode: 409 }));
     });
 
@@ -218,14 +368,14 @@ describe('AccessRequestService', () => {
       repository.findById.mockResolvedValue(mockDeniedRequest);
 
       await expect(
-        service.decide(mockDeniedRequest.id, { decision: RequestStatus.APPROVED }, mockApproverPayload)
+        service.decide(mockDeniedRequest.id, { decision: RequestStatus.APPROVED }, mockITPayload)
       ).rejects.toThrow(expect.objectContaining({ statusCode: 409 }));
     });
 
-    it('does not call repository.update when the request is not PENDING', async () => {
+    it('does not call repository.update when the request is already APPROVED', async () => {
       repository.findById.mockResolvedValue(mockApprovedRequest);
 
-      await service.decide(mockApprovedRequest.id, { decision: RequestStatus.DENIED }, mockApproverPayload)
+      await service.decide(mockApprovedRequest.id, { decision: RequestStatus.DENIED }, mockITPayload)
         .catch(() => {});
 
       expect(repository.update).not.toHaveBeenCalled();
@@ -259,10 +409,10 @@ describe('AccessRequestService', () => {
       expect(repository.findByUserId).not.toHaveBeenCalled();
     });
 
-    it('allows an APPROVER to view any user\'s requests', async () => {
+    it('allows an IT user to view any user\'s requests', async () => {
       repository.findByUserId.mockResolvedValue([mockPendingRequest]);
 
-      const result = await service.getByUser('user-alice-001', mockApproverPayload);
+      const result = await service.getByUser('user-alice-001', mockITPayload);
 
       expect(repository.findByUserId).toHaveBeenCalledWith('user-alice-001');
       expect(result).toEqual([mockPendingRequest]);
@@ -279,13 +429,22 @@ describe('AccessRequestService', () => {
 
   // ── getByStatus ────────────────────────────────────────────────────────────
   describe('getByStatus', () => {
-    it('returns PENDING requests for an APPROVER', async () => {
+    it('returns PENDING requests for an IT user', async () => {
       repository.findByStatus.mockResolvedValue([mockPendingRequest]);
 
-      const result = await service.getByStatus(RequestStatus.PENDING, mockApproverPayload);
+      const result = await service.getByStatus(RequestStatus.PENDING, mockITPayload);
 
       expect(repository.findByStatus).toHaveBeenCalledWith(RequestStatus.PENDING);
       expect(result).toEqual([mockPendingRequest]);
+    });
+
+    it('returns PARTIALLY_APPROVED requests', async () => {
+      repository.findByStatus.mockResolvedValue([mockPartiallyApprovedRequest]);
+
+      const result = await service.getByStatus(RequestStatus.PARTIALLY_APPROVED, mockITPayload);
+
+      expect(repository.findByStatus).toHaveBeenCalledWith(RequestStatus.PARTIALLY_APPROVED);
+      expect(result).toEqual([mockPartiallyApprovedRequest]);
     });
 
     it('throws AppError 403 when an EMPLOYEE calls getByStatus', async () => {
@@ -307,7 +466,7 @@ describe('AccessRequestService', () => {
     it('works for APPROVED status', async () => {
       repository.findByStatus.mockResolvedValue([mockApprovedRequest]);
 
-      const result = await service.getByStatus(RequestStatus.APPROVED, mockApproverPayload);
+      const result = await service.getByStatus(RequestStatus.APPROVED, mockITPayload);
 
       expect(repository.findByStatus).toHaveBeenCalledWith(RequestStatus.APPROVED);
       expect(result).toEqual([mockApprovedRequest]);
@@ -316,7 +475,7 @@ describe('AccessRequestService', () => {
     it('works for DENIED status', async () => {
       repository.findByStatus.mockResolvedValue([mockDeniedRequest]);
 
-      const result = await service.getByStatus(RequestStatus.DENIED, mockApproverPayload);
+      const result = await service.getByStatus(RequestStatus.DENIED, mockITPayload);
 
       expect(result).toEqual([mockDeniedRequest]);
     });
@@ -324,11 +483,11 @@ describe('AccessRequestService', () => {
 
   // ── getAll ─────────────────────────────────────────────────────────────────
   describe('getAll', () => {
-    it('returns all requests for an APPROVER', async () => {
+    it('returns all requests for an IT user', async () => {
       const all = [mockPendingRequest, mockApprovedRequest, mockDeniedRequest];
       repository.findAll.mockResolvedValue(all);
 
-      const result = await service.getAll(mockApproverPayload);
+      const result = await service.getAll(mockITPayload);
 
       expect(repository.findAll).toHaveBeenCalled();
       expect(result).toEqual(all);
@@ -351,7 +510,7 @@ describe('AccessRequestService', () => {
     it('returns an empty array when there are no requests', async () => {
       repository.findAll.mockResolvedValue([]);
 
-      const result = await service.getAll(mockApproverPayload);
+      const result = await service.getAll(mockITPayload);
 
       expect(result).toEqual([]);
     });
