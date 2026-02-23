@@ -6,18 +6,18 @@ import type { ReactNode } from 'react';
 
 interface PrivateRouteProps {
   children: ReactNode;
-  /** If set, the user must have this role or they are redirected to /dashboard. */
-  requiredRole?: Role;
+  /** If set, the user must have one of these roles or they are redirected to /dashboard. */
+  requiredRoles?: Role[];
 }
 
-export function PrivateRoute({ children, requiredRole }: PrivateRouteProps) {
+export function PrivateRoute({ children, requiredRoles }: PrivateRouteProps) {
   const { user, isLoading } = useAuth();
 
   if (isLoading) return <FullPageSpinner />;
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (requiredRole && user.role !== requiredRole) {
+  if (requiredRoles && !requiredRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
 

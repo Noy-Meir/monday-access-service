@@ -7,6 +7,15 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Role } from '../types';
 
+const DEMO_ACCOUNTS: { email: string; role: string }[] = [
+  { email: 'alice@company.com',  role: 'Employee' },
+  { email: 'bob@company.com',    role: 'Employee' },
+  { email: 'carol@company.com',  role: 'IT' },
+  { email: 'dave@company.com',   role: 'HR' },
+  { email: 'eve@company.com',    role: 'Manager' },
+  { email: 'frank@company.com',  role: 'Admin' },
+];
+
 export function LoginPage() {
   const { login, user } = useAuth();
   const { showToast } = useToast();
@@ -19,7 +28,7 @@ export function LoginPage() {
 
   // Redirect if already authenticated
   if (user) {
-    navigate(user.role === Role.APPROVER ? '/admin' : '/dashboard', { replace: true });
+    navigate(user.role === Role.EMPLOYEE ? '/dashboard' : '/admin', { replace: true });
     return null;
   }
 
@@ -39,10 +48,7 @@ export function LoginPage() {
     setIsLoading(true);
     try {
       await login(email.trim(), password);
-      // AuthContext will have updated — read role from the response
-      // We navigate after a tick to let state propagate
       showToast('Welcome back!', 'success');
-      // The navigate happens via the re-render once `user` is set
     } catch (err) {
       showToast(extractMessage(err), 'error');
     } finally {
@@ -105,36 +111,21 @@ export function LoginPage() {
 
           {/* Demo credentials helper */}
           <div className="mt-6 rounded-lg bg-gray-50 border border-gray-100 px-4 py-3">
-            <p className="text-xs font-medium text-gray-500 mb-2">Demo accounts (password: <code className="font-mono">Password123!</code>)</p>
-            <div className="grid grid-cols-2 gap-1 text-xs text-gray-500">
-              <button
-                type="button"
-                onClick={() => { setEmail('alice@company.com'); setPassword('Password123!'); }}
-                className="text-left hover:text-indigo-600 transition-colors truncate"
-              >
-                alice@company.com <span className="text-gray-400">(Employee)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => { setEmail('bob@company.com'); setPassword('Password123!'); }}
-                className="text-left hover:text-indigo-600 transition-colors truncate"
-              >
-                bob@company.com <span className="text-gray-400">(Employee)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => { setEmail('carol@company.com'); setPassword('Password123!'); }}
-                className="text-left hover:text-indigo-600 transition-colors truncate"
-              >
-                carol@company.com <span className="text-gray-400">(Approver)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => { setEmail('dave@company.com'); setPassword('Password123!'); }}
-                className="text-left hover:text-indigo-600 transition-colors truncate"
-              >
-                dave@company.com <span className="text-gray-400">(Approver)</span>
-              </button>
+            <p className="text-xs font-medium text-gray-500 mb-2">
+              Demo accounts (password: <code className="font-mono">Password123!</code>)
+            </p>
+            <div className="grid grid-cols-3 gap-1 text-xs text-gray-500">
+              {DEMO_ACCOUNTS.map(({ email: demoEmail, role }) => (
+                <button
+                  key={demoEmail}
+                  type="button"
+                  onClick={() => { setEmail(demoEmail); setPassword('Password123!'); }}
+                  className="text-left hover:text-indigo-600 transition-colors truncate"
+                >
+                  {demoEmail.split('@')[0]}{' '}
+                  <span className="text-gray-400">({role})</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>

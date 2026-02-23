@@ -10,7 +10,7 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  isApprover: boolean;
+  canApprove: boolean;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -62,10 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const isApprover = user?.role === Role.APPROVER;
+  const canApprove = user !== null && user.role !== Role.EMPLOYEE;
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout, isApprover }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout, canApprove }}>
       {children}
     </AuthContext.Provider>
   );

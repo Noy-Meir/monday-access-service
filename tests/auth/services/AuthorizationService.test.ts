@@ -1,7 +1,13 @@
 import { AuthorizationService } from '../../../src/services/AuthorizationService';
 import { Permission } from '../../../src/models/Permission';
 import { Role } from '../../../src/models/AccessRequest';
-import { mockEmployeePayload, mockApproverPayload } from '../../helpers/fixtures';
+import {
+  mockEmployeePayload,
+  mockITPayload,
+  mockManagerPayload,
+  mockHRPayload,
+  mockAdminPayload,
+} from '../../helpers/fixtures';
 
 describe('AuthorizationService', () => {
   let authz: AuthorizationService;
@@ -29,7 +35,7 @@ describe('AuthorizationService', () => {
       });
     });
 
-    describe('APPROVER role', () => {
+    describe('IT role', () => {
       it.each<[Permission, boolean]>([
         [Permission.ACCESS_REQUEST_CREATE,          true],
         [Permission.ACCESS_REQUEST_VIEW_OWN,        true],
@@ -37,7 +43,43 @@ describe('AuthorizationService', () => {
         [Permission.ACCESS_REQUEST_VIEW_BY_STATUS,  true],
         [Permission.ACCESS_REQUEST_DECIDE,           true],
       ])('%s → %s', (permission, expected) => {
-        expect(authz.hasPermission(mockApproverPayload, permission)).toBe(expected);
+        expect(authz.hasPermission(mockITPayload, permission)).toBe(expected);
+      });
+    });
+
+    describe('MANAGER role', () => {
+      it.each<[Permission, boolean]>([
+        [Permission.ACCESS_REQUEST_CREATE,          true],
+        [Permission.ACCESS_REQUEST_VIEW_OWN,        true],
+        [Permission.ACCESS_REQUEST_VIEW_ALL,         true],
+        [Permission.ACCESS_REQUEST_VIEW_BY_STATUS,  true],
+        [Permission.ACCESS_REQUEST_DECIDE,           true],
+      ])('%s → %s', (permission, expected) => {
+        expect(authz.hasPermission(mockManagerPayload, permission)).toBe(expected);
+      });
+    });
+
+    describe('HR role', () => {
+      it.each<[Permission, boolean]>([
+        [Permission.ACCESS_REQUEST_CREATE,          true],
+        [Permission.ACCESS_REQUEST_VIEW_OWN,        true],
+        [Permission.ACCESS_REQUEST_VIEW_ALL,         true],
+        [Permission.ACCESS_REQUEST_VIEW_BY_STATUS,  true],
+        [Permission.ACCESS_REQUEST_DECIDE,           true],
+      ])('%s → %s', (permission, expected) => {
+        expect(authz.hasPermission(mockHRPayload, permission)).toBe(expected);
+      });
+    });
+
+    describe('ADMIN role', () => {
+      it.each<[Permission, boolean]>([
+        [Permission.ACCESS_REQUEST_CREATE,          true],
+        [Permission.ACCESS_REQUEST_VIEW_OWN,        true],
+        [Permission.ACCESS_REQUEST_VIEW_ALL,         true],
+        [Permission.ACCESS_REQUEST_VIEW_BY_STATUS,  true],
+        [Permission.ACCESS_REQUEST_DECIDE,           true],
+      ])('%s → %s', (permission, expected) => {
+        expect(authz.hasPermission(mockAdminPayload, permission)).toBe(expected);
       });
     });
   });
@@ -46,7 +88,7 @@ describe('AuthorizationService', () => {
   describe('assertPermission', () => {
     it('does not throw when the actor holds the required permission', () => {
       expect(() =>
-        authz.assertPermission(mockApproverPayload, Permission.ACCESS_REQUEST_DECIDE)
+        authz.assertPermission(mockITPayload, Permission.ACCESS_REQUEST_DECIDE)
       ).not.toThrow();
     });
 
@@ -66,12 +108,42 @@ describe('AuthorizationService', () => {
       );
     });
 
-    it('allows APPROVER to assert every permission without throwing', () => {
+    it('allows IT to assert every permission without throwing', () => {
       Object.values(Permission).forEach((permission) => {
         expect(() =>
-          authz.assertPermission(mockApproverPayload, permission)
+          authz.assertPermission(mockITPayload, permission)
         ).not.toThrow();
       });
+    });
+
+    it('allows MANAGER to assert every permission without throwing', () => {
+      Object.values(Permission).forEach((permission) => {
+        expect(() =>
+          authz.assertPermission(mockManagerPayload, permission)
+        ).not.toThrow();
+      });
+    });
+
+    it('allows HR to assert every permission without throwing', () => {
+      Object.values(Permission).forEach((permission) => {
+        expect(() =>
+          authz.assertPermission(mockHRPayload, permission)
+        ).not.toThrow();
+      });
+    });
+
+    it('allows ADMIN to assert every permission without throwing', () => {
+      Object.values(Permission).forEach((permission) => {
+        expect(() =>
+          authz.assertPermission(mockAdminPayload, permission)
+        ).not.toThrow();
+      });
+    });
+
+    it('EMPLOYEE cannot DECIDE', () => {
+      expect(() =>
+        authz.assertPermission(mockEmployeePayload, Permission.ACCESS_REQUEST_DECIDE)
+      ).toThrow(expect.objectContaining({ statusCode: 403 }));
     });
 
     it('denies EMPLOYEE every permission outside their granted set', () => {

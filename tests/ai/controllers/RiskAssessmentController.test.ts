@@ -5,7 +5,7 @@ import { RiskAssessmentResult } from '../../../src/modules/ai-agent/types';
 import { AppError } from '../../../src/utils/AppError';
 import {
   mockEmployeePayload,
-  mockApproverPayload,
+  mockITPayload,
   mockPendingRequest,
 } from '../../helpers/fixtures';
 import { createMockNext, createMockRequest, createMockResponse } from '../../helpers/mockExpress';
@@ -69,7 +69,7 @@ describe('RiskAssessmentController', () => {
     const error = new AppError(`Access request '${mockPendingRequest.id}' not found`, 404);
     service.getById.mockRejectedValue(error);
 
-    const req = createMockRequest({ params: { id: mockPendingRequest.id }, user: mockApproverPayload });
+    const req = createMockRequest({ params: { id: mockPendingRequest.id }, user: mockITPayload });
     const res = createMockResponse();
     const next = createMockNext();
 
@@ -113,13 +113,13 @@ describe('RiskAssessmentController', () => {
     service.getById.mockResolvedValue(mockPendingRequest);
     agent.assess.mockResolvedValue(mockResult);
 
-    const req = createMockRequest({ params: { id: mockPendingRequest.id }, user: mockApproverPayload });
+    const req = createMockRequest({ params: { id: mockPendingRequest.id }, user: mockITPayload });
     const res = createMockResponse();
     const next = createMockNext();
 
     await controller.assess(req, res, next);
 
-    expect(service.getById).toHaveBeenCalledWith(mockPendingRequest.id, mockApproverPayload);
+    expect(service.getById).toHaveBeenCalledWith(mockPendingRequest.id, mockITPayload);
     expect(res.json).toHaveBeenCalledWith({ data: mockResult });
   });
 });

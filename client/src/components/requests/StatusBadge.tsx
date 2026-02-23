@@ -5,6 +5,10 @@ const config: Record<RequestStatus, { label: string; classes: string }> = {
     label: 'Pending',
     classes: 'bg-amber-100 text-amber-700 ring-amber-200',
   },
+  [RequestStatus.PARTIALLY_APPROVED]: {
+    label: 'Partially Approved',
+    classes: 'bg-indigo-100 text-indigo-700 ring-indigo-200',
+  },
   [RequestStatus.APPROVED]: {
     label: 'Approved',
     classes: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
