@@ -1,8 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { AccessRequest, RequestStatus, Role, User } from '../models/AccessRequest';
-import { InMemoryAccessRequestRepository } from '../modules/access-requests/repositories/InMemoryAccessRequestRepository';
-import { AuthService } from '../modules/auth/services/AuthService';
+import { InMemoryAccessRequestRepository } from '../repositories/InMemoryAccessRequestRepository';
+import { AuthService } from '../services/AuthService';
 import { logger } from '../utils/logger';
 
 const SALT_ROUNDS = 10;

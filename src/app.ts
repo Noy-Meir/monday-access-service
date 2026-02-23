@@ -1,8 +1,8 @@
 import express from 'express';
 import helmet from 'helmet';
 import { container } from './container';
-import { createAuthRouter } from './modules/auth/routes/auth.routes';
-import { createAccessRequestRouter } from './modules/access-requests/routes/accessRequest.routes';
+import { createAuthRouter } from './routes/auth.routes';
+import { createAccessRequestRouter } from './routes/accessRequest.routes';
 import { requestLoggerMiddleware } from './middleware/requestLogger.middleware';
 import { generalRateLimiter } from './middleware/rateLimiter.middleware';
 import { errorMiddleware } from './middleware/error.middleware';

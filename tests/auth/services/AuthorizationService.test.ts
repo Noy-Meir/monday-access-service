@@ -1,4 +1,4 @@
-import { AuthorizationService } from '../../../src/modules/auth/services/AuthorizationService';
+import { AuthorizationService } from '../../../src/services/AuthorizationService';
 import { Permission } from '../../../src/models/Permission';
 import { Role } from '../../../src/models/AccessRequest';
 import {

@@ -1,5 +1,5 @@
-import { RiskAssessmentController } from '../../../src/modules/ai-agent/controllers/RiskAssessmentController';
-import { AccessRequestService } from '../../../src/modules/access-requests/services/AccessRequestService';
+import { RiskAssessmentController } from '../../../src/controllers/RiskAssessmentController';
+import { AccessRequestService } from '../../../src/services/AccessRequestService';
 import { IRiskAssessmentAgent } from '../../../src/modules/ai-agent/agent/IRiskAssessmentAgent';
 import { RiskAssessmentResult } from '../../../src/modules/ai-agent/types';
 import { AppError } from '../../../src/utils/AppError';

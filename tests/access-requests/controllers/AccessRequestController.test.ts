@@ -1,6 +1,6 @@
 
-import { AccessRequestController } from '../../../src/modules/access-requests/controllers/AccessRequestController';
-import { AccessRequestService } from '../../../src/modules/access-requests/services/AccessRequestService';
+import { AccessRequestController } from '../../../src/controllers/AccessRequestController';
+import { AccessRequestService } from '../../../src/services/AccessRequestService';
 import { AppError } from '../../../src/utils/AppError';
 import { RequestStatus } from '../../../src/models/AccessRequest';
 // @ts-ignore

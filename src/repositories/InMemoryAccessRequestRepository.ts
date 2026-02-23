@@ -1,4 +1,4 @@
-import { AccessRequest, RequestStatus } from '../../../models/AccessRequest';
+import { AccessRequest, RequestStatus } from '../models/AccessRequest';
 import { IAccessRequestRepository } from './IAccessRequestRepository';
 
 /**

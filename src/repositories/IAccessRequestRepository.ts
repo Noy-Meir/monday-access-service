@@ -1,4 +1,4 @@
-import { AccessRequest, RequestStatus } from '../../../models/AccessRequest';
+import { AccessRequest, RequestStatus } from '../models/AccessRequest';
 
 export interface IAccessRequestRepository {
   save(request: AccessRequest): Promise<AccessRequest>;
