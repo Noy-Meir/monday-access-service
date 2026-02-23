@@ -6,6 +6,7 @@ import { createAccessRequestRouter } from './modules/access-requests/routes/acce
 import { requestLoggerMiddleware } from './middleware/requestLogger.middleware';
 import { generalRateLimiter } from './middleware/rateLimiter.middleware';
 import { errorMiddleware } from './middleware/error.middleware';
+import cors from 'cors';
 
 const app = express();
 
@@ -23,6 +24,11 @@ app.use(generalRateLimiter);
 // ── Body Parsing & Observability ──────────────────────────────────────────────
 app.use(express.json());
 app.use(requestLoggerMiddleware);
+
+app.use(cors());
+
+app.use(express.json());
+
 
 // ── Health Check (no auth required) ──────────────────────────────────────────
 app.get('/health', (_req, res) => {
