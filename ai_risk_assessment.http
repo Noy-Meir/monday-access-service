@@ -1,0 +1,162 @@
+# =============================================================================
+# monday-access-service — AI Risk Assessment API Tests
+# WebStorm REST Client (.http)
+#
+# HOW TO USE:
+#   1. Start the server:  npm run dev
+#   2. Run [1] Employee Login and [2] Approver Login first to capture tokens.
+#   3. Run [3] Create requests to get IDs, then update the variables below.
+#   4. Run risk assessment requests against those IDs.
+#
+# MOCK USERS (seeded at startup):
+#   alice@company.com  / Password123!  → EMPLOYEE
+#   carol@company.com  / Password123!  → APPROVER
+#
+# ENV VARIABLES (toggle the AI provider):
+#   Default (mock):   npm run dev
+#   Real Claude:      AI_PROVIDER=claude ANTHROPIC_API_KEY=sk-ant-... npm run dev
+# =============================================================================
+
+@baseUrl = http://localhost:3000
+
+# After running [3a] and [3b] below, paste the returned ids here
+@low_risk_request_id    = 6489760a-d8e9-478f-91be-69e909f00d45
+@high_risk_request_id   = 6489760a-d8e9-478f-91be-69e909f00d45
+
+
+# =============================================================================
+# [1] LOGIN — EMPLOYEE
+# =============================================================================
+
+### Login as Employee (alice)
+# Expected: 200 { "data": { "token": "...", "user": { "role": "EMPLOYEE", ... } } }
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "alice@company.com",
+  "password": "Password123!"
+}
+
+> {%
+  client.global.set("auth_token", response.body.data.token);
+  client.log("Employee token captured: " + response.body.data.token.substring(0, 20) + "...");
+%}
+
+
+# =============================================================================
+# [2] LOGIN — APPROVER
+# =============================================================================
+
+### Login as Approver (carol)
+# Expected: 200 { "data": { "token": "...", "user": { "role": "APPROVER", ... } } }
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "carol@company.com",
+  "password": "Password123!"
+}
+
+> {%
+  client.global.set("admin_token", response.body.data.token);
+  client.log("Approver token captured: " + response.body.data.token.substring(0, 20) + "...");
+%}
+
+
+# =============================================================================
+# [3] CREATE REQUESTS WITH VARYING RISK LEVELS
+# =============================================================================
+
+### [3a] Create LOW-risk request (Employee)
+# "Slack" has no HIGH/MEDIUM keywords → mock provider returns LOW.
+# Copy the returned `id` and paste it into @low_risk_request_id above.
+# Expected: 201 { "data": { "id": "...", "status": "PENDING", ... } }
+POST {{baseUrl}}/api/access-requests
+Content-Type: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "applicationName": "Slack",
+  "justification": "Need access to collaborate with my team on the Q3 project planning and daily standups."
+}
+
+> {%
+  client.global.set("low_risk_request_id", response.body.data.id);
+  client.log("Low-risk request ID: " + response.body.data.id);
+%}
+
+###
+
+### [3b] Create HIGH-risk request (Employee)
+# "Production Database" contains the HIGH-risk keyword "production" → mock
+# provider returns HIGH (or CRITICAL depending on justification length).
+# Copy the returned `id` and paste it into @high_risk_request_id above.
+# Expected: 201 { "data": { "id": "...", "status": "PENDING", ... } }
+POST {{baseUrl}}/api/access-requests
+Content-Type: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "applicationName": "Production Database",
+  "justification": "Need access."
+}
+
+> {%
+  client.global.set("high_risk_request_id", response.body.data.id);
+  client.log("High-risk request ID: " + response.body.data.id);
+%}
+
+###
+
+### [3c] Create MEDIUM-risk request (Employee)
+# "Finance Portal" contains the MEDIUM-risk keyword "finance".
+POST {{baseUrl}}/api/access-requests
+Content-Type: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "applicationName": "Finance Portal",
+  "justification": "Need access to run end-of-quarter expense reports and budget reconciliation."
+}
+
+> {%
+  client.global.set("medium_risk_request_id", response.body.data.id);
+  client.log("Medium-risk request ID: " + response.body.data.id);
+%}
+
+
+# =============================================================================
+# [4] RISK ASSESSMENT — EMPLOYEE (own request)
+# =============================================================================
+
+### [4a] Assess LOW-risk request as Employee
+# Employee can assess their own request (getById authorisation passes).
+# Expected: 200 { "data": { "score": 8, "riskLevel": "LOW", "reasoning": "...", "metrics": { ... } } }
+POST {{baseUrl}}/api/access-requests/{{low_risk_request_id}}/risk-assessment
+Authorization: Bearer {{auth_token}}
+
+###
+
+### [4b] Assess HIGH-risk request as Employee
+# "Production Database" with short justification → CRITICAL (score 88).
+# Expected: 200 { "data": { "score": 88, "riskLevel": "CRITICAL", ... } }
+POST {{baseUrl}}/api/access-requests/{{high_risk_request_id}}/risk-assessment
+Authorization: Bearer {{auth_token}}
+
+###
+
+### [4c] Assess MEDIUM-risk request as Employee
+# Expected: 200 { "data": { "score": 20, "riskLevel": "LOW", ... } }
+POST {{baseUrl}}/api/access-requests/{{medium_risk_request_id}}/risk-assessment
+Authorization: Bearer {{auth_token}}
+
+
+# =============================================================================
+# [5] RISK ASSESSMENT — APPROVER (any request)
+# =============================================================================
+
+### [5a] Approver assesses request
+# Expected: 200 { "data": { "score": 8, "riskLevel": "LOW", ... } }
+POST {{baseUrl}}/api/access-requests/{{low_risk_request_id}}/risk-assessment
+Authorization: Bearer {{admin_token}}

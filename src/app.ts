@@ -1,8 +1,8 @@
 import express from 'express';
 import helmet from 'helmet';
 import { container } from './container';
-import { createAuthRouter } from './routes/auth.routes';
-import { createAccessRequestRouter } from './routes/accessRequest.routes';
+import { createAuthRouter } from './modules/auth/routes/auth.routes';
+import { createAccessRequestRouter } from './modules/access-requests/routes/accessRequest.routes';
 import { requestLoggerMiddleware } from './middleware/requestLogger.middleware';
 import { generalRateLimiter } from './middleware/rateLimiter.middleware';
 import { errorMiddleware } from './middleware/error.middleware';
@@ -33,7 +33,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', createAuthRouter(container.authController));
 app.use(
   '/api/access-requests',
-  createAccessRequestRouter(container.accessRequestController, container.authService)
+  createAccessRequestRouter(container.accessRequestController, container.authService, container.riskAssessmentController)
 );
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
