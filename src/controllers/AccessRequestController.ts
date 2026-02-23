@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AccessRequestService } from '../services/AccessRequestService';
-import {RequestStatus} from '../../../models/AccessRequest';
-import { AppError } from '../../../utils/AppError';
+import {RequestStatus} from '../models/AccessRequest';
+import { AppError } from '../utils/AppError';
 
 export class AccessRequestController {
   constructor(private readonly service: AccessRequestService) {}

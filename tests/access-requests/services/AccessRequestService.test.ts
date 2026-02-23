@@ -1,6 +1,6 @@
-import { AccessRequestService } from '../../../src/modules/access-requests/services/AccessRequestService';
-import { AuthorizationService } from '../../../src/modules/auth/services/AuthorizationService';
-import { IAccessRequestRepository } from '../../../src/modules/access-requests/repositories/IAccessRequestRepository';
+import { AccessRequestService } from '../../../src/services/AccessRequestService';
+import { AuthorizationService } from '../../../src/services/AuthorizationService';
+import { IAccessRequestRepository } from '../../../src/repositories/IAccessRequestRepository';
 import { AppError } from '../../../src/utils/AppError';
 import { RequestStatus, Role } from '../../../src/models/AccessRequest';
 import { Permission } from '../../../src/models/Permission';

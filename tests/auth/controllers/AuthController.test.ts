@@ -1,5 +1,5 @@
-import { AuthController } from '../../../src/modules/auth/controllers/AuthController';
-import { AuthService } from '../../../src/modules/auth/services/AuthService';
+import { AuthController } from '../../../src/controllers/AuthController';
+import { AuthService } from '../../../src/services/AuthService';
 import { AppError } from '../../../src/utils/AppError';
 import { mockUser } from '../../helpers/fixtures';
 import { createMockNext, createMockRequest, createMockResponse } from '../../helpers/mockExpress';

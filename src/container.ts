@@ -4,13 +4,13 @@
  * and their dependencies wired together. Nothing else in the codebase
  * calls `new` on a service or repository.
  */
-import { InMemoryAccessRequestRepository } from './modules/access-requests/repositories/InMemoryAccessRequestRepository';
-import { AuthService } from './modules/auth/services/AuthService';
-import { AuthorizationService } from './modules/auth/services/AuthorizationService';
-import { AccessRequestService } from './modules/access-requests/services/AccessRequestService';
-import { AccessRequestController } from './modules/access-requests/controllers/AccessRequestController';
-import { AuthController } from './modules/auth/controllers/AuthController';
-import { RiskAssessmentController } from './modules/ai-agent/controllers/RiskAssessmentController';
+import { InMemoryAccessRequestRepository } from './repositories/InMemoryAccessRequestRepository';
+import { AuthService } from './services/AuthService';
+import { AuthorizationService } from './services/AuthorizationService';
+import { AccessRequestService } from './services/AccessRequestService';
+import { AccessRequestController } from './controllers/AccessRequestController';
+import { AuthController } from './controllers/AuthController';
+import { RiskAssessmentController } from './controllers/RiskAssessmentController';
 import { IAiProvider } from './modules/ai-agent/providers/IAiProvider';
 import { MockAiProvider } from './modules/ai-agent/providers/MockAiProvider';
 import { ClaudeAiProvider } from './modules/ai-agent/providers/ClaudeAiProvider';

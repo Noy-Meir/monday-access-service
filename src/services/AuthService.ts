@@ -1,8 +1,8 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { config } from '../../../config';
-import { Role, TokenPayload, User } from '../../../models/AccessRequest';
-import { AppError } from '../../../utils/AppError';
+import { config } from '../config';
+import { Role, TokenPayload, User } from '../models/AccessRequest';
+import { AppError } from '../utils/AppError';
 
 export class AuthService {
   private readonly users: Map<string, User>;

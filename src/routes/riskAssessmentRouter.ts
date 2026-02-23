@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { RiskAssessmentController } from '../../ai-agent/controllers/RiskAssessmentController';
-import { createAuthenticateMiddleware } from '../../../middleware/authenticate.middleware';
-import {AuthService} from "../../auth/services/AuthService";
+import { RiskAssessmentController } from '../controllers/RiskAssessmentController';
+import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
+import {AuthService} from "../services/AuthService";
 
 export function createRiskAssessmentRouter(
     authService: AuthService,

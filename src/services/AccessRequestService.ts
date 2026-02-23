@@ -1,10 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
-import { AccessRequest, RequestStatus, TokenPayload } from '../../../models/AccessRequest';
-import { Permission } from '../../../models/Permission';
+import { AccessRequest, RequestStatus, TokenPayload } from '../models/AccessRequest';
+import { Permission } from '../models/Permission';
 import { IAccessRequestRepository } from '../repositories/IAccessRequestRepository';
-import { AuthorizationService } from '../../auth/services/AuthorizationService';
-import { AppError } from '../../../utils/AppError';
-import { logger } from '../../../utils/logger';
+import { AuthorizationService } from './AuthorizationService';
+import { AppError } from '../utils/AppError';
+import { logger } from '../utils/logger';
 
 export interface CreateAccessRequestInput {
   applicationName: string;
