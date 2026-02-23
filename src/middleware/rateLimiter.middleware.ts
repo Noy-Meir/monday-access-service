@@ -23,25 +23,22 @@ export const generalRateLimiter = rateLimit({
 
 /**
  * Strict limiter for POST /api/auth/login.
- * 10 attempts per 15 min defends against credential-stuffing attacks
- * without locking out a user who misremembers their password a few times.
  */
 export const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
+  windowMs: 5 * 60 * 1000,
+  limit: 5,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  message: rateLimitMessage('too many login attempts — wait 15 minutes before retrying'),
+  message: rateLimitMessage('too many login attempts — wait 5 minutes before retrying'),
 });
 
 /**
  * Limiter for POST /api/access-requests (submit a new request).
  * Prevents a single user from spamming the approval queue.
- * 30 submissions per 15 min is more than enough for legitimate use.
  */
 export const createRequestRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 30,
+  windowMs: 5 * 60 * 1000,
+  limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: rateLimitMessage('you are submitting access requests too quickly'),
