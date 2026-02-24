@@ -1,4 +1,5 @@
 import { AuthService } from '../../../src/services/AuthService';
+import { IUserRepository } from '../../../src/repositories/IUserRepository';
 import { AppError } from '../../../src/utils/AppError';
 import { Role, User } from '../../../src/models/AccessRequest';
 import { mockUser } from '../../helpers/fixtures';
@@ -22,9 +23,23 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Builds a jest-mocked IUserRepository pre-populated with the given users.
+ * findById and findByEmail resolve from a local Map so each test stays isolated.
+ */
+function buildMockRepo(users: User[] = []): jest.Mocked<IUserRepository> {
+  const byId    = new Map(users.map((u) => [u.id,    u]));
+  const byEmail = new Map(users.map((u) => [u.email, u]));
+  return {
+    findById:    jest.fn(async (id)    => byId.get(id)),
+    findByEmail: jest.fn(async (email) => byEmail.get(email)),
+    save:        jest.fn(async (_user: User): Promise<void> => {}),
+  };
+}
+
 function buildService(users: User[] = []): AuthService {
-  const map = new Map(users.map((u) => [u.id, u]));
-  return new AuthService(map);
+  return new AuthService(buildMockRepo(users));
 }
 
 describe('AuthService', () => {
@@ -113,6 +128,16 @@ describe('AuthService', () => {
 
       expect(bcrypt.compare).not.toHaveBeenCalled();
     });
+
+    it('delegates the email lookup to the user repository', async () => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      const repo = buildMockRepo([mockUser]);
+      const service = new AuthService(repo);
+
+      await service.login(mockUser.email, 'Password123!');
+
+      expect(repo.findByEmail).toHaveBeenCalledWith(mockUser.email);
+    });
   });
 
   // ── verifyToken ────────────────────────────────────────────────────────────
@@ -152,48 +177,36 @@ describe('AuthService', () => {
 
   // ── findUserById ───────────────────────────────────────────────────────────
   describe('findUserById', () => {
-    it('returns the user when found', () => {
+    it('returns the user when found', async () => {
       const service = buildService([mockUser]);
-      expect(service.findUserById(mockUser.id)).toEqual(mockUser);
+      expect(await service.findUserById(mockUser.id)).toEqual(mockUser);
     });
 
-    it('returns undefined for a non-existent id', () => {
+    it('returns undefined for a non-existent id', async () => {
       const service = buildService([mockUser]);
-      expect(service.findUserById('no-such-id')).toBeUndefined();
-    });
-  });
-
-  // ── registerUser ───────────────────────────────────────────────────────────
-  describe('registerUser', () => {
-    it('makes the user discoverable by findUserById after registration', () => {
-      const service = buildService();
-      const newUser: User = { ...mockUser, id: 'new-user-999' };
-
-      service.registerUser(newUser);
-
-      expect(service.findUserById('new-user-999')).toEqual(newUser);
+      expect(await service.findUserById('no-such-id')).toBeUndefined();
     });
 
-    it('overwrites an existing user when registered with the same id', () => {
-      const service = buildService([mockUser]);
-      const updated: User = { ...mockUser, name: 'Updated Name' };
+    it('delegates to the user repository', async () => {
+      const repo = buildMockRepo([mockUser]);
+      const service = new AuthService(repo);
 
-      service.registerUser(updated);
+      await service.findUserById(mockUser.id);
 
-      expect(service.findUserById(mockUser.id)?.name).toBe('Updated Name');
+      expect(repo.findById).toHaveBeenCalledWith(mockUser.id);
     });
   });
 
   // ── getUserRole ────────────────────────────────────────────────────────────
   describe('getUserRole', () => {
-    it('returns the role for an existing user', () => {
+    it('returns the role for an existing user', async () => {
       const service = buildService([mockUser]);
-      expect(service.getUserRole(mockUser.id)).toBe(Role.EMPLOYEE);
+      expect(await service.getUserRole(mockUser.id)).toBe(Role.EMPLOYEE);
     });
 
-    it('returns undefined for an unknown user', () => {
+    it('returns undefined for an unknown user', async () => {
       const service = buildService();
-      expect(service.getUserRole('ghost')).toBeUndefined();
+      expect(await service.getUserRole('ghost')).toBeUndefined();
     });
   });
 });

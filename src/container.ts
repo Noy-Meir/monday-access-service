@@ -4,6 +4,7 @@
  * and their dependencies wired together. Nothing else in the codebase
  * calls `new` on a service or repository.
  */
+import { InMemoryUserRepository } from './repositories/InMemoryUserRepository';
 import { InMemoryAccessRequestRepository } from './repositories/InMemoryAccessRequestRepository';
 import { AuthService } from './services/AuthService';
 import { AuthorizationService } from './services/AuthorizationService';
@@ -16,13 +17,13 @@ import { config } from './config';
 import { logger } from './utils/logger';
 
 // ── Repositories ──────────────────────────────────────────────────────────────
+const userRepository = new InMemoryUserRepository();
 const accessRequestRepository = new InMemoryAccessRequestRepository();
 
 // ── Services ──────────────────────────────────────────────────────────────────
-// AuthService owns the user Map; seedData() populates it via registerUser().
-const authService = new AuthService(new Map());
+const authService = new AuthService(userRepository);
 const authorizationService = new AuthorizationService();
-const accessRequestService = new AccessRequestService(accessRequestRepository, authorizationService);
+const accessRequestService = new AccessRequestService(accessRequestRepository);
 
 // ── AI ────────────────────────────────────────────────────────────────────────
 function createAiProvider(): IAiProvider {
@@ -39,6 +40,7 @@ function createAiProvider(): IAiProvider {
 const riskAssessmentAgent = new RiskAssessmentAgent(createAiProvider());
 
 export const container = {
+  userRepository,
   accessRequestRepository,
   authService,
   authorizationService,

@@ -1,14 +1,14 @@
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { AccessRequest, RequestStatus, Role, User } from '../models/AccessRequest';
+import { IUserRepository } from '../repositories/IUserRepository';
 import { InMemoryAccessRequestRepository } from '../repositories/InMemoryAccessRequestRepository';
-import { AuthService } from '../services/AuthService';
 import { logger } from '../utils/logger';
 
 const SALT_ROUNDS = 10;
 
 export async function seedData(
-  authService: AuthService,
+  userRepository: IUserRepository,
   repository: InMemoryAccessRequestRepository
 ): Promise<void> {
   logger.info('Seeding mock data...');
@@ -24,7 +24,7 @@ export async function seedData(
     { id: 'user-frank-006',  email: 'frank@company.com', passwordHash, name: 'Frank Admin',    role: Role.ADMIN    },
   ];
 
-  users.forEach((u) => authService.registerUser(u));
+  await Promise.all(users.map((u) => userRepository.save(u)));
 
   const now = new Date();
   const daysAgo = (n: number) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);

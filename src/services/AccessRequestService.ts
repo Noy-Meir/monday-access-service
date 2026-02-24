@@ -1,12 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { AccessRequest, Approval, RequestStatus, Role, TokenPayload } from '../models/AccessRequest';
-import { Permission } from '../models/Permission';
 import { IAccessRequestRepository } from '../repositories/IAccessRequestRepository';
-import { AuthorizationService } from './AuthorizationService';
 import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
-import {getRequiredApprovals} from "../config/applications";
-
+import { getRequiredApprovals } from '../config/applications';
 
 export interface CreateAccessRequestInput {
   applicationName: string;
@@ -18,12 +15,19 @@ export interface DecideAccessRequestInput {
   decisionNote?: string;
 }
 
+/**
+ * Pure domain service for access-request lifecycle management.
+ *
+ * Authorization (RBAC, permission checks, role boundaries) is the
+ * responsibility of the caller — the GraphQL resolver layer.  This service
+ * assumes every call has already been authorized and focuses exclusively on
+ * business logic: request creation, multi-step approval flow, audit trail,
+ * and state-machine invariants.
+ */
 export class AccessRequestService {
-  constructor(
-    private readonly repository: IAccessRequestRepository,
-    private readonly authz: AuthorizationService
-  ) {}
+  constructor(private readonly repository: IAccessRequestRepository) {}
 
+  /** Creates a new PENDING access request with the correct requiredApprovals. */
   async create(input: CreateAccessRequestInput, actor: TokenPayload): Promise<AccessRequest> {
     const request: AccessRequest = {
       id: uuidv4(),
@@ -42,21 +46,32 @@ export class AccessRequestService {
     return saved;
   }
 
+  /**
+   * Records a decision (APPROVED / DENIED) on an existing request.
+   *
+   * Business-logic invariants enforced here:
+   *  - Already-finalised requests cannot be decided again (409).
+   *  - DENIED is always immediate, regardless of role.
+   *  - ADMIN approval is an immediate full-approval override (domain rule).
+   *  - Non-ADMIN approval contributes to multi-step flow:
+   *      duplicate role → 409; all roles covered → APPROVED; otherwise → PARTIALLY_APPROVED.
+   *
+   * The caller (resolver) is responsible for:
+   *  - Verifying the actor holds the DECIDE permission.
+   *  - Verifying the actor's role is listed in request.requiredApprovals
+   *    (unless the actor is ADMIN).
+   */
   async decide(
     requestId: string,
     input: DecideAccessRequestInput,
     actor: TokenPayload
   ): Promise<AccessRequest> {
-    // 1. Assert DECIDE permission (role-level gate)
-    this.authz.assertPermission(actor, Permission.ACCESS_REQUEST_DECIDE);
-
-    // 2. Find request
     const request = await this.repository.findById(requestId);
     if (!request) {
       throw new AppError(`Access request '${requestId}' not found`, 404);
     }
 
-    // 3. Reject if already finalized
+    // State-machine invariant: only PENDING or PARTIALLY_APPROVED can be decided.
     if (request.status === RequestStatus.APPROVED || request.status === RequestStatus.DENIED) {
       throw new AppError(
         `Cannot decide on a request with status '${request.status}'. Only PENDING or PARTIALLY_APPROVED requests can be decided.`,
@@ -64,15 +79,7 @@ export class AccessRequestService {
       );
     }
 
-    // 4. Role boundary: non-ADMIN actors must be in requiredApprovals
-    if (actor.role !== Role.ADMIN && !request.requiredApprovals.includes(actor.role)) {
-      throw new AppError(
-        `Role '${actor.role}' is not authorized to approve requests for '${request.applicationName}'`,
-        403
-      );
-    }
-
-    // 5. DENIED — immediate finalization for any authorized role
+    // DENIED — immediate finalisation for any authorized role.
     if (input.decision === RequestStatus.DENIED) {
       const updated: AccessRequest = {
         ...request,
@@ -87,7 +94,7 @@ export class AccessRequestService {
       return result;
     }
 
-    // 6. APPROVED + ADMIN — immediate full-approval override
+    // APPROVED + ADMIN — immediate full-approval override (domain rule).
     if (actor.role === Role.ADMIN) {
       const updated: AccessRequest = {
         ...request,
@@ -102,13 +109,10 @@ export class AccessRequestService {
       return result;
     }
 
-    // 7. APPROVED + non-ADMIN — multi-step approval
+    // APPROVED + non-ADMIN — multi-step approval flow.
     const alreadyApproved = request.approvals.some((a) => a.role === actor.role);
     if (alreadyApproved) {
-      throw new AppError(
-        `Role '${actor.role}' has already approved this request`,
-        409
-      );
+      throw new AppError(`Role '${actor.role}' has already approved this request`, 409);
     }
 
     const newApproval: Approval = {
@@ -146,36 +150,30 @@ export class AccessRequestService {
     return result;
   }
 
-  async getByUser(userId: string, actor: TokenPayload): Promise<AccessRequest[]> {
-    // Actors without VIEW_ALL can only query their own requests.
-    if (!this.authz.hasPermission(actor, Permission.ACCESS_REQUEST_VIEW_ALL) && actor.sub !== userId) {
-      throw new AppError('You can only view your own access requests', 403);
-    }
+  /** Returns all requests created by the given user. No permission check — caller is responsible. */
+  async getByUser(userId: string): Promise<AccessRequest[]> {
     return this.repository.findByUserId(userId);
   }
 
-  async getByStatus(status: RequestStatus, actor: TokenPayload): Promise<AccessRequest[]> {
-    this.authz.assertPermission(actor, Permission.ACCESS_REQUEST_VIEW_BY_STATUS);
+  /** Returns requests filtered by status. No permission check — caller is responsible. */
+  async getByStatus(status: RequestStatus): Promise<AccessRequest[]> {
     return this.repository.findByStatus(status);
   }
 
-  async getAll(actor: TokenPayload): Promise<AccessRequest[]> {
-    this.authz.assertPermission(actor, Permission.ACCESS_REQUEST_VIEW_ALL);
+  /** Returns all requests. No permission check — caller is responsible. */
+  async getAll(): Promise<AccessRequest[]> {
     return this.repository.findAll();
   }
 
-  async getById(id: string, actor: TokenPayload): Promise<AccessRequest> {
+  /**
+   * Retrieves a request by ID, throwing 404 if absent.
+   * Ownership / visibility checks are the caller's responsibility.
+   */
+  async getById(id: string): Promise<AccessRequest> {
     const request = await this.repository.findById(id);
-
     if (!request) {
       throw new AppError('Request not found', 404);
     }
-
-    // Actors without VIEW_ALL can only see their own requests.
-    if (!this.authz.hasPermission(actor, Permission.ACCESS_REQUEST_VIEW_ALL) && request.createdBy !== actor.sub) {
-      throw new AppError('Not authorized to view this request', 403);
-    }
-
     return request;
   }
 }

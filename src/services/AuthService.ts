@@ -2,17 +2,15 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { config } from '../config';
 import { Role, TokenPayload, User } from '../models/AccessRequest';
+import { IUserRepository } from '../repositories/IUserRepository';
 import { AppError } from '../utils/AppError';
 
-export class AuthService {
-  private readonly users: Map<string, User>;
 
-  constructor(users: Map<string, User>) {
-    this.users = users;
-  }
+export class AuthService {
+  constructor(private readonly userRepo: IUserRepository) {}
 
   async login(email: string, password: string): Promise<{ token: string; user: Omit<User, 'passwordHash'> }> {
-    const user = Array.from(this.users.values()).find((u) => u.email === email);
+    const user = await this.userRepo.findByEmail(email);
 
     // Use the same error message for both unknown email and wrong password
     // to prevent user enumeration attacks.
@@ -48,16 +46,12 @@ export class AuthService {
     }
   }
 
-  findUserById(id: string): User | undefined {
-    return this.users.get(id);
+  async findUserById(id: string): Promise<User | undefined> {
+    return this.userRepo.findById(id);
   }
 
-  getUserRole(id: string): Role | undefined {
-    return this.users.get(id)?.role;
-  }
-
-  /** Registers a user into the in-memory store. Used only during seeding. */
-  registerUser(user: User): void {
-    this.users.set(user.id, user);
+  async getUserRole(id: string): Promise<Role | undefined> {
+    const user = await this.userRepo.findById(id);
+    return user?.role;
   }
 }
