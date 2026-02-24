@@ -1,9 +1,7 @@
-version: '3.9'
-
 services:
   monday-access-service:
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
     container_name: monday-access-service
     ports:
