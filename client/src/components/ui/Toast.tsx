@@ -1,7 +1,10 @@
+'use client';
+
+import type { ReactElement } from 'react';
 import { useToast } from '../../hooks/useToast';
 import type { ToastItem, ToastType } from '../../context/ToastContext';
 
-const icons: Record<ToastType, JSX.Element> = {
+const icons: Record<ToastType, ReactElement> = {
   success: (
     <svg className="h-5 w-5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
       <path

@@ -1,4 +1,7 @@
-import { Link, useLocation } from 'react-router-dom';
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import { Role } from '../../types';
 
@@ -12,20 +15,20 @@ const rolePill: Record<Role, { label: string; classes: string }> = {
 
 export function Navbar() {
   const { user, logout, canApprove } = useAuth();
-  const location = useLocation();
+  const pathname = usePathname();
 
   const navLinks = [
     { to: '/dashboard', label: 'My Requests', show: true },
     { to: '/admin', label: 'Admin Panel', show: canApprove },
   ];
 
-  const isActive = (to: string) => location.pathname === to;
+  const isActive = (to: string) => pathname === to;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white/90 backdrop-blur-sm">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4 sm:px-6">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 shrink-0">
+        <Link href="/" className="flex items-center gap-2 shrink-0">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600">
             <svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor">
               <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -43,7 +46,7 @@ export function Navbar() {
             .map((link) => (
               <Link
                 key={link.to}
-                to={link.to}
+                href={link.to}
                 className={[
                   'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                   isActive(link.to)
