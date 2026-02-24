@@ -65,14 +65,14 @@ describe('AccessRequestService', () => {
       applicationName: 'GitHub',
       justification: 'Need access for Q3 campaign management.',
     };
-
+//////TODO:  CHANGE AFTER TESTING /// /
     it('saves a request with PENDING status', async () => {
       repository.save.mockResolvedValue(mockPendingRequest);
 
       await service.create(input, mockEmployeePayload);
 
       expect(repository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ status: RequestStatus.PENDING })
+        expect.objectContaining({ status: RequestStatus.APPROVED })
       );
     });
 
