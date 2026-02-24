@@ -5,8 +5,6 @@ import { Permission } from '../models/Permission';
 import { authRateLimiter, createRequestRateLimiter } from '../middleware/rateLimiter.middleware';
 import type { GraphQLContext } from './context';
 
-// ── Authorization helpers ──────────────────────────────────────────────────────
-
 /**
  * Throws UNAUTHENTICATED when no actor is present in the context.
  * Used as the first line of defence in every protected resolver.
@@ -45,9 +43,6 @@ type ResolverFn<TArgs = Record<string, unknown>> = (
  * Declarative resolver wrapper that enforces authentication and a single
  * permission before delegating to the wrapped resolver.
  *
- * Usage:
- *   someField: withPermission(Permission.SOME_PERM, async (_, args, ctx) => { … })
- *
  * After the wrapper runs, ctx.actor is guaranteed to be non-null inside the
  * inner resolver, so it is safe to write ctx.actor! there.
  */
@@ -69,10 +64,6 @@ function withPermission<TArgs = Record<string, unknown>>(
  * rejected request propagates through the Promise below instead of writing a
  * raw HTTP 429 response to the socket.  Both authRateLimiter and
  * createRequestRateLimiter are configured this way in rateLimiter.middleware.ts.
- *
- * Usage:
- *   someField: withRateLimit(authRateLimiter, async (_, args, ctx) => { … })
- *   someField: withRateLimit(limiter, withPermission(perm, resolver))
  */
 function withRateLimit<TArgs = Record<string, unknown>>(
   limiter: RequestHandler,
@@ -94,7 +85,6 @@ function withRateLimit<TArgs = Record<string, unknown>>(
   };
 }
 
-// ── Serialisation ──────────────────────────────────────────────────────────────
 
 /** Converts Date fields to ISO strings for the GraphQL transport layer. */
 function serializeRequest(request: AccessRequest) {
@@ -113,17 +103,9 @@ function serializeRequest(request: AccessRequest) {
   };
 }
 
-// ── Resolvers ──────────────────────────────────────────────────────────────────
 
 export const resolvers = {
-  // ── Queries ─────────────────────────────────────────────────────────────────
   Query: {
-    /**
-     * myRequests — any authenticated user may call this.
-     * "Self or VIEW_ALL" rule: actors without VIEW_ALL can only query their
-     * own userId.  This is explicit resolver-level logic; the service receives
-     * only the userId and performs no permission checks.
-     */
     myRequests: async (
       _: unknown,
       { userId }: { userId: string },
@@ -145,7 +127,6 @@ export const resolvers = {
       return requests.map(serializeRequest);
     },
 
-    /** allRequests — requires VIEW_ALL (MANAGER / IT / HR / ADMIN). */
     allRequests: withPermission(
       Permission.ACCESS_REQUEST_VIEW_ALL,
       async (_, __, ctx) => {
@@ -154,7 +135,6 @@ export const resolvers = {
       }
     ),
 
-    /** requestsByStatus — requires VIEW_BY_STATUS (MANAGER / IT / HR / ADMIN). */
     requestsByStatus: withPermission(
       Permission.ACCESS_REQUEST_VIEW_BY_STATUS,
       async (_, { status }: { status: RequestStatus }, ctx) => {
@@ -163,11 +143,6 @@ export const resolvers = {
       }
     ),
 
-    /**
-     * riskAssessment — any authenticated user may call this.
-     * "Self or VIEW_ALL" rule: actors without VIEW_ALL can only assess their
-     * own requests.
-     */
     riskAssessment: async (
       _: unknown,
       { requestId }: { requestId: string },
@@ -197,12 +172,7 @@ export const resolvers = {
     },
   },
 
-  // ── Mutations ────────────────────────────────────────────────────────────────
   Mutation: {
-    /**
-     * login — public endpoint, no authentication required.
-     * Rate-limited to 5 attempts / 5 min per IP via authRateLimiter.
-     */
     login: withRateLimit(
       authRateLimiter,
       async (_: unknown, { email, password }: { email: string; password: string }, ctx) => {
@@ -210,11 +180,6 @@ export const resolvers = {
       }
     ),
 
-    /**
-     * createRequest — requires CREATE permission (all roles).
-     * Rate-limited to 10 submissions / 5 min per IP via createRequestRateLimiter.
-     * withRateLimit runs first (cheaper), then withPermission (auth check).
-     */
     createRequest: withRateLimit(
       createRequestRateLimiter,
       withPermission(
@@ -233,17 +198,6 @@ export const resolvers = {
       )
     ),
 
-    /**
-     * decideRequest — requires DECIDE permission (MANAGER / IT / HR / ADMIN).
-     *
-     * Role-boundary enforcement is done here at the resolver layer:
-     *   1. Pre-fetch the request to inspect its requiredApprovals.
-     *   2. Non-ADMIN actors whose role is absent from requiredApprovals → FORBIDDEN.
-     *
-     * The service then handles the remaining domain logic: duplicate-approval
-     * detection, ADMIN override, multi-step partial-approval flow, and the
-     * full audit trail.
-     */
     decideRequest: withPermission(
       Permission.ACCESS_REQUEST_DECIDE,
       async (
