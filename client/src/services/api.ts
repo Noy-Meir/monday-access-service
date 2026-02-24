@@ -5,18 +5,18 @@ import { getErrorMessage } from '../utils/errorMessages';
  * Shared Axios instance.
  *
  * Base URL:
- *  - Development: empty string → Vite proxy forwards /api/* to http://localhost:3000
- *  - Production: set VITE_API_URL to the deployed backend URL
+ *  - Development: empty string → Next.js rewrite forwards /api/* to the backend
+ *  - Production: set NEXT_PUBLIC_API_URL to the deployed backend URL
  */
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+  baseURL: process.env.NEXT_PUBLIC_API_URL ?? '',
   headers: { 'Content-Type': 'application/json' },
   timeout: 15_000,
 });
 
 // ── Request interceptor: attach JWT ──────────────────────────────────────────
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -29,11 +29,10 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     const status = error.response?.status ?? 0;
 
-    // On 401, clear stored credentials and let React Router redirect to /login
-    if (status === 401) {
+    // On 401, clear stored credentials and dispatch logout event
+    if (status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
-      // Navigate without full page reload when possible
       window.dispatchEvent(new Event('auth:logout'));
     }
 

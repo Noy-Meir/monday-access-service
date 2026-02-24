@@ -1,5 +1,7 @@
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+'use client';
+
+import { useState, useEffect, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { extractMessage } from '../utils/errorMessages';
@@ -19,7 +21,7 @@ const DEMO_ACCOUNTS: { email: string; role: string }[] = [
 export function LoginPage() {
   const { login, user } = useAuth();
   const { showToast } = useToast();
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,10 +29,13 @@ export function LoginPage() {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   // Redirect if already authenticated
-  if (user) {
-    navigate(user.role === Role.EMPLOYEE ? '/dashboard' : '/admin', { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (user) {
+      router.replace(user.role === Role.EMPLOYEE ? '/dashboard' : '/admin');
+    }
+  }, [user, router]);
+
+  if (user) return null;
 
   function validate(): boolean {
     const next: { email?: string; password?: string } = {};

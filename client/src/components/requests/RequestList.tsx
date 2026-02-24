@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect, useCallback } from 'react';
 import { requestsService } from '../../services/requests.service';
 import { useAuth } from '../../hooks/useAuth';

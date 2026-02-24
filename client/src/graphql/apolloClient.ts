@@ -9,12 +9,14 @@ import { onError } from '@apollo/client/link/error';
 
 // ── HTTP link ─────────────────────────────────────────────────────────────────
 const httpLink = createHttpLink({
-  uri: `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/graphql`,
+  // In development the Next.js rewrite in next.config.ts proxies /graphql to the backend.
+  // In production set NEXT_PUBLIC_API_URL to the deployed backend base URL.
+  uri: `${process.env.NEXT_PUBLIC_API_URL ?? ''}/graphql`,
 });
 
 // ── Auth link: attach JWT from localStorage ───────────────────────────────────
 const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem('access_token');
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
   return {
     headers: {
       ...headers,
@@ -29,7 +31,7 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
     graphQLErrors?.some((e) => e.extensions?.code === 'UNAUTHENTICATED') ||
     (networkError && 'statusCode' in networkError && networkError.statusCode === 401);
 
-  if (isUnauthenticated) {
+  if (isUnauthenticated && typeof window !== 'undefined') {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
     window.dispatchEvent(new Event('auth:logout'));
