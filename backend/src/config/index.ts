@@ -2,6 +2,11 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
+export enum AiProvider {
+  MOCK   = 'mock',
+  CLAUDE = 'claude',
+}
+
 function requireEnv(key: string, fallback?: string): string {
   const value = process.env[key] ?? fallback;
   if (value === undefined) {
@@ -18,7 +23,7 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN ?? '8h',
   },
   ai: {
-    provider: (process.env.AI_PROVIDER ?? 'mock') as 'mock' | 'claude',
+    provider: (process.env.AI_PROVIDER ?? AiProvider.MOCK) as AiProvider,
     apiKey:   process.env.ANTHROPIC_API_KEY ?? '',
     model:    process.env.ANTHROPIC_MODEL   ?? 'claude-haiku-4-5-20251001',
   },

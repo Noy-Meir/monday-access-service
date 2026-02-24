@@ -1,6 +1,11 @@
 import { AccessRequest } from '../../models/AccessRequest';
 
-export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export enum RiskLevel {
+  LOW      = 'LOW',
+  MEDIUM   = 'MEDIUM',
+  HIGH     = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
 
 export interface RiskAssessmentInput {
   requestId: string;

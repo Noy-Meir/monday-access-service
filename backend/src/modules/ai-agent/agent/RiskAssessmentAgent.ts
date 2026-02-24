@@ -2,7 +2,7 @@ import { AccessRequest } from '../../../models/AccessRequest';
 import { logger } from '../../../utils/logger';
 import { IAiProvider } from '../providers/IAiProvider';
 import { IRiskAssessmentAgent } from './IRiskAssessmentAgent';
-import { RiskAssessmentResult, toRiskAssessmentInput } from '../types';
+import { RiskAssessmentResult, RiskLevel, toRiskAssessmentInput } from '../types';
 
 export class RiskAssessmentAgent implements IRiskAssessmentAgent {
   constructor(private readonly provider: IAiProvider) {}
@@ -34,7 +34,7 @@ export class RiskAssessmentAgent implements IRiskAssessmentAgent {
       },
     };
 
-    if (result.riskLevel === 'LOW' || result.riskLevel === 'MEDIUM') {
+    if (result.riskLevel === RiskLevel.LOW || result.riskLevel === RiskLevel.MEDIUM) {
       logger.info('Risk assessment complete', {
         requestId: result.requestId,
         riskLevel: result.riskLevel,

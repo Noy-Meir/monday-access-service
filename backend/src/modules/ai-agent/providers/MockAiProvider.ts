@@ -1,3 +1,4 @@
+import { AiProvider } from '../../../config';
 import { IAiProvider } from './IAiProvider';
 import { RiskAssessmentInput, ProviderResult, RiskLevel } from '../types';
 
@@ -10,7 +11,7 @@ function matchesKeywords(applicationName: string, keywords: string[]): boolean {
 }
 
 export class MockAiProvider implements IAiProvider {
-  readonly providerName = 'mock';
+  readonly providerName = AiProvider.MOCK;
 
   async assess(input: RiskAssessmentInput): Promise<ProviderResult> {
     const justLen = input.justification.length;
@@ -24,35 +25,35 @@ export class MockAiProvider implements IAiProvider {
     if (isHigh) {
       if (justLen < 50) {
         score = 88;
-        riskLevel = 'CRITICAL';
+        riskLevel = RiskLevel.CRITICAL;
         reasoning = `High-risk application "${input.applicationName}" with insufficient justification (${justLen} chars). Escalation required.`;
       } else if (justLen < 100) {
         score = 72;
-        riskLevel = 'HIGH';
+        riskLevel = RiskLevel.HIGH;
         reasoning = `High-risk application "${input.applicationName}" with moderate justification. Requires approver scrutiny.`;
       } else {
         score = 55;
-        riskLevel = 'MEDIUM';
+        riskLevel = RiskLevel.MEDIUM;
         reasoning = `High-risk application "${input.applicationName}" but detailed justification provided (${justLen} chars).`;
       }
     } else if (isMedium) {
       if (justLen < 50) {
         score = 45;
-        riskLevel = 'MEDIUM';
+        riskLevel = RiskLevel.MEDIUM;
         reasoning = `Medium-risk application "${input.applicationName}" with brief justification (${justLen} chars).`;
       } else {
         score = 20;
-        riskLevel = 'LOW';
+        riskLevel = RiskLevel.LOW;
         reasoning = `Medium-risk application "${input.applicationName}" with adequate justification.`;
       }
     } else {
       if (justLen < 50) {
         score = 18;
-        riskLevel = 'LOW';
+        riskLevel = RiskLevel.LOW;
         reasoning = `Standard application "${input.applicationName}" with brief justification.`;
       } else {
         score = 8;
-        riskLevel = 'LOW';
+        riskLevel = RiskLevel.LOW;
         reasoning = `Standard application "${input.applicationName}" with adequate justification. Low risk.`;
       }
     }

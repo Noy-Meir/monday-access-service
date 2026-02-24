@@ -1,10 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { config } from '../../../config';
+import { AiProvider, config } from '../../../config';
 import { AppError } from '../../../utils/AppError';
 import { IAiProvider } from './IAiProvider';
 import { RiskAssessmentInput, ProviderResult, RiskLevel } from '../types';
 
-const VALID_RISK_LEVELS: RiskLevel[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+const VALID_RISK_LEVELS: RiskLevel[] = [RiskLevel.LOW, RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL];
 
 const SYSTEM_PROMPT = `You are a security risk assessment AI. Analyze the provided access request and respond with ONLY a valid JSON object — no markdown, no explanation, no code blocks — with exactly these fields:
 {
@@ -14,7 +14,7 @@ const SYSTEM_PROMPT = `You are a security risk assessment AI. Analyze the provid
 }`;
 
 export class ClaudeAiProvider implements IAiProvider {
-  readonly providerName = 'claude';
+  readonly providerName = AiProvider.CLAUDE;
   private readonly client: Anthropic;
 
   constructor() {

@@ -5,6 +5,12 @@ import { Permission } from '../models/Permission';
 import { authRateLimiter, createRequestRateLimiter } from '../middleware/rateLimiter.middleware';
 import type { GraphQLContext } from './context';
 
+export enum GraphQLErrorCode {
+  UNAUTHENTICATED   = 'UNAUTHENTICATED',
+  FORBIDDEN         = 'FORBIDDEN',
+  TOO_MANY_REQUESTS = 'TOO_MANY_REQUESTS',
+}
+
 /**
  * Throws UNAUTHENTICATED when no actor is present in the context.
  * Used as the first line of defence in every protected resolver.
@@ -12,7 +18,7 @@ import type { GraphQLContext } from './context';
 function requireActor(ctx: GraphQLContext): void {
   if (!ctx.actor) {
     throw new GraphQLError('Authentication required', {
-      extensions: { code: 'UNAUTHENTICATED' },
+      extensions: { code: GraphQLErrorCode.UNAUTHENTICATED },
     });
   }
 }
@@ -27,7 +33,7 @@ function requirePermission(ctx: GraphQLContext, permission: Permission): void {
   if (!ctx.authorizationService.hasPermission(ctx.actor!, permission)) {
     throw new GraphQLError(
       `Access denied: role '${ctx.actor!.role}' does not have permission '${permission}'`,
-      { extensions: { code: 'FORBIDDEN' } }
+      { extensions: { code: GraphQLErrorCode.FORBIDDEN } }
     );
   }
 }
@@ -77,7 +83,7 @@ function withRateLimit<TArgs = Record<string, unknown>>(
       });
     }).catch(() => {
       throw new GraphQLError('Too many requests. Please try again later.', {
-        extensions: { code: 'TOO_MANY_REQUESTS' },
+        extensions: { code: GraphQLErrorCode.TOO_MANY_REQUESTS },
       });
     });
 
@@ -119,7 +125,7 @@ export const resolvers = {
       );
       if (!canViewAll && ctx.actor!.sub !== userId) {
         throw new GraphQLError('You can only view your own access requests', {
-          extensions: { code: 'FORBIDDEN' },
+          extensions: { code: GraphQLErrorCode.FORBIDDEN },
         });
       }
 
@@ -158,7 +164,7 @@ export const resolvers = {
       );
       if (!canViewAll && request.createdBy !== ctx.actor!.sub) {
         throw new GraphQLError('Not authorized to view this request', {
-          extensions: { code: 'FORBIDDEN' },
+          extensions: { code: GraphQLErrorCode.FORBIDDEN },
         });
       }
 
@@ -215,7 +221,7 @@ export const resolvers = {
         ) {
           throw new GraphQLError(
             `Role '${ctx.actor!.role}' is not authorized to approve requests for '${request.applicationName}'`,
-            { extensions: { code: 'FORBIDDEN' } }
+            { extensions: { code: GraphQLErrorCode.FORBIDDEN } }
           );
         }
 
