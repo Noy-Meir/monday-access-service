@@ -1,14 +1,19 @@
 import { GraphQLError } from 'graphql';
 import type { RequestHandler } from 'express';
+import { z } from 'zod';
 import { AccessRequest, RequestStatus, Role } from '../models/AccessRequest';
 import { Permission } from '../models/Permission';
 import { authRateLimiter, createRequestRateLimiter } from '../middleware/rateLimiter.middleware';
+import { loginSchema } from '../validators/login.schema';
+import { createAccessRequestSchema } from '../validators/createAccessRequest.schema';
+import { decideAccessRequestSchema } from '../validators/decideAccessRequest.schema';
 import type { GraphQLContext } from './context';
 
 export enum GraphQLErrorCode {
   UNAUTHENTICATED   = 'UNAUTHENTICATED',
   FORBIDDEN         = 'FORBIDDEN',
   TOO_MANY_REQUESTS = 'TOO_MANY_REQUESTS',
+  BAD_USER_INPUT    = 'BAD_USER_INPUT',
 }
 
 /**
@@ -88,6 +93,29 @@ function withRateLimit<TArgs = Record<string, unknown>>(
     });
 
     return resolver(parent, args, ctx);
+  };
+}
+
+/**
+ * Declarative resolver wrapper that validates incoming args against a Zod
+ * schema before delegating to the wrapped resolver.
+ *
+ * Throws BAD_USER_INPUT with all Zod error messages joined on failure.
+ * On success, passes the parsed (trimmed/coerced) data to the inner resolver.
+ */
+function withValidation<TArgs>(
+  schema: z.ZodType<TArgs>,
+  resolver: ResolverFn<TArgs>
+): ResolverFn<TArgs> {
+  return async (parent, args, ctx) => {
+    const result = schema.safeParse(args);
+    if (!result.success) {
+      throw new GraphQLError(
+        result.error.errors.map(e => e.message).join('; '),
+        { extensions: { code: GraphQLErrorCode.BAD_USER_INPUT } }
+      );
+    }
+    return resolver(parent, result.data, ctx);
   };
 }
 
@@ -181,57 +209,58 @@ export const resolvers = {
   Mutation: {
     login: withRateLimit(
       authRateLimiter,
-      async (_: unknown, { email, password }: { email: string; password: string }, ctx) => {
-        return ctx.authService.login(email, password);
-      }
+      withValidation(
+        loginSchema,
+        async (_: unknown, { email, password }, ctx) => {
+          return ctx.authService.login(email, password);
+        }
+      )
     ),
 
     createRequest: withRateLimit(
       createRequestRateLimiter,
       withPermission(
         Permission.ACCESS_REQUEST_CREATE,
-        async (
-          _,
-          { applicationName, justification }: { applicationName: string; justification: string },
-          ctx
-        ) => {
-          const request = await ctx.accessRequestService.create(
-            { applicationName, justification },
-            ctx.actor!
-          );
-          return serializeRequest(request);
-        }
+        withValidation(
+          createAccessRequestSchema,
+          async (_, { applicationName, justification }, ctx) => {
+            const request = await ctx.accessRequestService.create(
+              { applicationName, justification },
+              ctx.actor!
+            );
+            return serializeRequest(request);
+          }
+        )
       )
     ),
 
     decideRequest: withPermission(
       Permission.ACCESS_REQUEST_DECIDE,
-      async (
-        _,
-        { id, decision, decisionNote }: { id: string; decision: RequestStatus; decisionNote?: string },
-        ctx
-      ) => {
-        // Pre-fetch the request so the role-boundary check can run before
-        // any mutating business logic executes.
-        const request = await ctx.accessRequestService.getById(id);
+      withValidation(
+        decideAccessRequestSchema.extend({ id: z.string() }),
+        async (_, { id, decision, decisionNote }, ctx) => {
+          // Pre-fetch the request so the role-boundary check can run before
+          // any mutating business logic executes.
+          const request = await ctx.accessRequestService.getById(id);
 
-        if (
-          ctx.actor!.role !== Role.ADMIN &&
-          !request.requiredApprovals.includes(ctx.actor!.role)
-        ) {
-          throw new GraphQLError(
-            `Role '${ctx.actor!.role}' is not authorized to approve requests for '${request.applicationName}'`,
-            { extensions: { code: GraphQLErrorCode.FORBIDDEN } }
+          if (
+            ctx.actor!.role !== Role.ADMIN &&
+            !request.requiredApprovals.includes(ctx.actor!.role)
+          ) {
+            throw new GraphQLError(
+              `Role '${ctx.actor!.role}' is not authorized to approve requests for '${request.applicationName}'`,
+              { extensions: { code: GraphQLErrorCode.FORBIDDEN } }
+            );
+          }
+
+          const updated = await ctx.accessRequestService.decide(
+            id,
+            { decision: decision as RequestStatus.APPROVED | RequestStatus.DENIED, decisionNote },
+            ctx.actor!
           );
+          return serializeRequest(updated);
         }
-
-        const updated = await ctx.accessRequestService.decide(
-          id,
-          { decision: decision as RequestStatus.APPROVED | RequestStatus.DENIED, decisionNote },
-          ctx.actor!
-        );
-        return serializeRequest(updated);
-      }
+      )
     ),
   },
 };
