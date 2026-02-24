@@ -2,13 +2,13 @@
   "name": "monday-access-service",
   "version": "1.0.0",
   "description": "Production-grade REST API for managing application access requests",
-  "main": "dist/index.js",
+  "main": "../dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "test": "jest",
-    "test:coverage": "jest --coverage"
+    "dev": "../node_modules/.bin/tsx watch backend/src/index.ts",
+    "build": "../node_modules/.bin/tsc",
+    "start": "node ../dist/index.js",
+    "test": "../node_modules/.bin/jest",
+    "test:coverage": "../node_modules/.bin/jest --coverage"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
