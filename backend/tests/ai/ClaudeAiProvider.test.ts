@@ -9,6 +9,7 @@ jest.mock('@anthropic-ai/sdk', () => ({
 
 // ── Mock config ───────────────────────────────────────────────────────────────
 jest.mock('../../src/config', () => ({
+  AiProvider: { MOCK: 'mock', CLAUDE: 'claude' },
   config: {
     ai: {
       provider: 'claude',
