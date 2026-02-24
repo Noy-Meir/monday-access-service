@@ -1,6 +1,6 @@
 import { RiskAssessmentAgent } from '../../src/modules/ai-agent/agent/RiskAssessmentAgent';
 import { IAiProvider } from '../../src/modules/ai-agent/providers/IAiProvider';
-import { ProviderResult, RiskAssessmentInput } from '../../src/modules/ai-agent/types';
+import { ProviderResult, RiskAssessmentInput, RiskLevel } from '../../src/modules/ai-agent/types';
 import { AccessRequest, RequestStatus } from '../../src/models/AccessRequest';
 
 jest.mock('../../src/utils/logger', () => ({
@@ -26,7 +26,7 @@ function buildMockProvider(result: Partial<ProviderResult> = {}): jest.Mocked<IA
     providerName: 'mock',
     assess: jest.fn().mockResolvedValue({
       score: 10,
-      riskLevel: 'LOW',
+      riskLevel: RiskLevel.LOW,
       reasoning: 'Low risk assessment',
       ...result,
     } as ProviderResult),
@@ -61,7 +61,7 @@ describe('RiskAssessmentAgent', () => {
 
     expect(result.requestId).toBe(mockRequest.id);
     expect(typeof result.score).toBe('number');
-    expect(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).toContain(result.riskLevel);
+    expect(Object.values(RiskLevel)).toContain(result.riskLevel);
     expect(typeof result.reasoning).toBe('string');
     expect(result.assessedAt).toBeInstanceOf(Date);
     expect(result.metrics).toBeDefined();
@@ -109,7 +109,7 @@ describe('RiskAssessmentAgent', () => {
 
   // ── Logging: LOW → logger.info ────────────────────────────────────────────
   it('calls logger.info for LOW risk level', async () => {
-    const agent = new RiskAssessmentAgent(buildMockProvider({ riskLevel: 'LOW' }));
+    const agent = new RiskAssessmentAgent(buildMockProvider({ riskLevel: RiskLevel.LOW }));
     await agent.assess(mockRequest);
 
     expect(logger.info).toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe('RiskAssessmentAgent', () => {
   });
 
   it('calls logger.info for MEDIUM risk level', async () => {
-    const agent = new RiskAssessmentAgent(buildMockProvider({ riskLevel: 'MEDIUM' }));
+    const agent = new RiskAssessmentAgent(buildMockProvider({ riskLevel: RiskLevel.MEDIUM }));
     await agent.assess(mockRequest);
 
     expect(logger.info).toHaveBeenCalled();
@@ -126,7 +126,7 @@ describe('RiskAssessmentAgent', () => {
 
   // ── Logging: HIGH/CRITICAL → logger.warn ──────────────────────────────────
   it('calls logger.warn for HIGH risk level', async () => {
-    const agent = new RiskAssessmentAgent(buildMockProvider({ riskLevel: 'HIGH', score: 72 }));
+    const agent = new RiskAssessmentAgent(buildMockProvider({ riskLevel: RiskLevel.HIGH, score: 72 }));
     await agent.assess(mockRequest);
 
     expect(logger.warn).toHaveBeenCalled();
@@ -134,7 +134,7 @@ describe('RiskAssessmentAgent', () => {
   });
 
   it('calls logger.warn for CRITICAL risk level', async () => {
-    const agent = new RiskAssessmentAgent(buildMockProvider({ riskLevel: 'CRITICAL', score: 88 }));
+    const agent = new RiskAssessmentAgent(buildMockProvider({ riskLevel: RiskLevel.CRITICAL, score: 88 }));
     await agent.assess(mockRequest);
 
     expect(logger.warn).toHaveBeenCalled();

@@ -16,13 +16,9 @@ export interface DecideAccessRequestInput {
 }
 
 /**
- * Pure domain service for access-request lifecycle management.
- *
- * Authorization (RBAC, permission checks, role boundaries) is the
- * responsibility of the caller — the GraphQL resolver layer.  This service
- * assumes every call has already been authorized and focuses exclusively on
- * business logic: request creation, multi-step approval flow, audit trail,
- * and state-machine invariants.
+ * Domain service for request lifecycle management.
+ * * Logic only: Assumes authorization (RBAC/permissions) was handled by the resolver.
+ * Focuses on: Creation, multi-step flow, audit trails, and state invariants.
  */
 export class AccessRequestService {
   constructor(private readonly repository: IAccessRequestRepository) {}
@@ -47,19 +43,13 @@ export class AccessRequestService {
   }
 
   /**
-   * Records a decision (APPROVED / DENIED) on an existing request.
-   *
-   * Business-logic invariants enforced here:
-   *  - Already-finalised requests cannot be decided again (409).
-   *  - DENIED is always immediate, regardless of role.
-   *  - ADMIN approval is an immediate full-approval override (domain rule).
-   *  - Non-ADMIN approval contributes to multi-step flow:
-   *      duplicate role → 409; all roles covered → APPROVED; otherwise → PARTIALLY_APPROVED.
-   *
-   * The caller (resolver) is responsible for:
-   *  - Verifying the actor holds the DECIDE permission.
-   *  - Verifying the actor's role is listed in request.requiredApprovals
-   *    (unless the actor is ADMIN).
+   * Records a decision (APPROVED/DENIED).
+   * * Rules:
+   * - Finalized requests: 409 Conflict.
+   * - DENIED: Immediate.
+   * - ADMIN Approval: Immediate override.
+   * - Other Approvals: Multi-step (Duplicate role: 409, All covered: APPROVED, Else: PARTIALLY_APPROVED).
+   * * Pre-conditions (Resolver): Actor must have DECIDE permission and a valid role.
    */
   async decide(
     requestId: string,

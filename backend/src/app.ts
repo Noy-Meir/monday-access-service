@@ -6,19 +6,15 @@ import cors from 'cors';
 
 const app = express();
 
-// ── Security Headers ──────────────────────────────────────────────────────────
 app.use(helmet());
 
-// ── Global Rate Limiter ───────────────────────────────────────────────────────
 app.use(generalRateLimiter);
 
-// ── Body Parsing & Observability ──────────────────────────────────────────────
 app.use(express.json());
 app.use(requestLoggerMiddleware);
 
 app.use(cors());
 
-// ── Health Check (no auth required) ──────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

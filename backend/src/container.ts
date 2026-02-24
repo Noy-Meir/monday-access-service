@@ -13,7 +13,7 @@ import { IAiProvider } from './modules/ai-agent/providers/IAiProvider';
 import { MockAiProvider } from './modules/ai-agent/providers/MockAiProvider';
 import { ClaudeAiProvider } from './modules/ai-agent/providers/ClaudeAiProvider';
 import { RiskAssessmentAgent } from './modules/ai-agent/agent/RiskAssessmentAgent';
-import { config } from './config';
+import { AiProvider, config } from './config';
 import { logger } from './utils/logger';
 
 // ── Repositories ──────────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ const accessRequestService = new AccessRequestService(accessRequestRepository);
 
 // ── AI ────────────────────────────────────────────────────────────────────────
 function createAiProvider(): IAiProvider {
-  if (config.ai.provider === 'claude') {
+  if (config.ai.provider === AiProvider.CLAUDE) {
     if (!config.ai.apiKey) {
       logger.warn('AI_PROVIDER=claude but ANTHROPIC_API_KEY not set — falling back to mock');
       return new MockAiProvider();

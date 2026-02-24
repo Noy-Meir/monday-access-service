@@ -106,17 +106,9 @@ async function bootstrap(): Promise<void> {
 }
 
 /**
- * Registers SIGTERM and SIGINT handlers for graceful shutdown.
- *
- * Shutdown sequence:
- *   1. Stop accepting new TCP connections (server.close).
- *   2. Wait for in-flight requests to drain naturally.
- *   3. Flush Winston transports so no log lines are dropped.
- *   4. Exit with code 0.
- *
- * A 10-second watchdog fires if draining stalls (e.g. a client holding a
- * keep-alive connection open). It exits with code 1 to signal an unclean stop
- * to the container orchestrator (Kubernetes, ECS, etc.).
+ * Graceful shutdown handlers (SIGTERM/SIGINT).
+ * * Sequence: Stop TCP -> Drain requests -> Flush logs -> Exit(0).
+ * * Watchdog: 10-second timeout triggers Exit(1) if draining stalls.
  */
 function registerShutdownHandlers(server: Server): void {
   const shutdown = (signal: string): void => {
