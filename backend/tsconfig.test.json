@@ -6,7 +6,7 @@
     "noUnusedParameters": false
   },
   "include": [
-    "backend/src/**/*",
-    "backend/tests/**/*"
+    "src/**/*",
+    "tests/**/*"
   ]
 }

@@ -3,7 +3,6 @@ import rateLimit from 'express-rate-limit';
 /**
  * General-purpose limiter applied to every route.
  * Acts as a broad backstop against accidental floods and scripted crawlers.
- * 200 req / 15 min per IP is generous for normal interactive use.
  */
 export const generalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -16,7 +15,7 @@ export const generalRateLimiter = rateLimit({
 /**
  * Strict limiter for the login mutation.
  *
- * Uses a next(error) handler instead of a direct res.send so that the
+ * Uses a next(error) handler instead of a direct res. send so that the
  * withRateLimit resolver wrapper can detect rejection via the Promise and
  * convert it into a GraphQLError with code TOO_MANY_REQUESTS.
  */

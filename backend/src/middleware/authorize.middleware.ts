@@ -7,11 +7,6 @@ import { AppError } from '../utils/AppError';
  * Must be used after createAuthenticateMiddleware (requires req.user to be set).
  *
  * Accepts a single Permission instead of a role list, so routes read as
- * plain English:  authorize(Permission.ACCESS_REQUEST_DECIDE)
- * rather than:    authorize([Role.APPROVER])
- *
- * The permission → role mapping lives entirely in ROLE_PERMISSIONS (models/Permission.ts).
- * No role name ever appears in route definitions.
  */
 export function createAuthorizeMiddleware(requiredPermission: Permission) {
   return function authorize(req: Request, _res: Response, next: NextFunction): void {
