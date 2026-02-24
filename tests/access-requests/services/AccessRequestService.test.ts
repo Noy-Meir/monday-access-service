@@ -1,14 +1,27 @@
+/**
+ * AccessRequestService unit tests.
+ *
+ * The service is now a pure domain layer — it performs NO permission checks.
+ * All RBAC / authorization is handled at the GraphQL resolver layer and is
+ * tested in tests/graphql/resolvers.test.ts.
+ *
+ * These tests verify the service's business-logic invariants only:
+ *   - Request creation (audit fields, UUID, requiredApprovals)
+ *   - Multi-step approval flow (PARTIALLY_APPROVED → APPROVED)
+ *   - ADMIN override (immediate APPROVED regardless of requiredApprovals)
+ *   - DENIED path (immediate finalisation)
+ *   - State-machine guards (409 on already-finalised, 409 on duplicate role)
+ *   - 404 on unknown request ID
+ *   - Read methods (getByUser, getByStatus, getAll, getById)
+ */
 import { AccessRequestService } from '../../../src/services/AccessRequestService';
-import { AuthorizationService } from '../../../src/services/AuthorizationService';
 import { IAccessRequestRepository } from '../../../src/repositories/IAccessRequestRepository';
 import { AppError } from '../../../src/utils/AppError';
 import { RequestStatus, Role } from '../../../src/models/AccessRequest';
-import { Permission } from '../../../src/models/Permission';
 import {
   mockEmployeePayload,
   mockITPayload,
   mockManagerPayload,
-  mockHRPayload,
   mockAdminPayload,
   mockPendingRequest,
   mockApprovedRequest,
@@ -17,14 +30,14 @@ import {
   mockPartiallyApprovedRequest,
 } from '../../helpers/fixtures';
 
-// ── Module mocks ──────────────────────────────────────────────────────────────
+// ── Module mocks ───────────────────────────────────────────────────────────────
 jest.mock('uuid', () => ({ v4: jest.fn().mockReturnValue('generated-uuid') }));
 
 jest.mock('../../../src/utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 
-// ── Repository mock ───────────────────────────────────────────────────────────
+// ── Repository mock ────────────────────────────────────────────────────────────
 function buildMockRepository(): jest.Mocked<IAccessRequestRepository> {
   return {
     save: jest.fn(),
@@ -42,11 +55,11 @@ describe('AccessRequestService', () => {
 
   beforeEach(() => {
     repository = buildMockRepository();
-    // Use a real AuthorizationService — it is stateless and has no external deps.
-    service = new AccessRequestService(repository, new AuthorizationService());
+    // No AuthorizationService — the service has no authorization dependency.
+    service = new AccessRequestService(repository);
   });
 
-  // ── create ─────────────────────────────────────────────────────────────────
+  // ── create ───────────────────────────────────────────────────────────────────
   describe('create', () => {
     const input = {
       applicationName: 'GitHub',
@@ -120,7 +133,10 @@ describe('AccessRequestService', () => {
     it('sets requiredApprovals to [IT] for a known tech app (GitHub)', async () => {
       repository.save.mockResolvedValue(mockPendingRequest);
 
-      await service.create({ applicationName: 'GitHub', justification: 'Need access.' }, mockEmployeePayload);
+      await service.create(
+        { applicationName: 'GitHub', justification: 'Need access.' },
+        mockEmployeePayload
+      );
 
       expect(repository.save).toHaveBeenCalledWith(
         expect.objectContaining({ requiredApprovals: [Role.IT] })
@@ -130,7 +146,10 @@ describe('AccessRequestService', () => {
     it('sets requiredApprovals to [ADMIN] for an unknown app name', async () => {
       repository.save.mockResolvedValue(mockPendingRequest);
 
-      await service.create({ applicationName: 'UnknownApp123', justification: 'Need access.' }, mockEmployeePayload);
+      await service.create(
+        { applicationName: 'UnknownApp123', justification: 'Need access.' },
+        mockEmployeePayload
+      );
 
       expect(repository.save).toHaveBeenCalledWith(
         expect.objectContaining({ requiredApprovals: [Role.ADMIN] })
@@ -148,7 +167,7 @@ describe('AccessRequestService', () => {
     });
   });
 
-  // ── decide ─────────────────────────────────────────────────────────────────
+  // ── decide ───────────────────────────────────────────────────────────────────
   describe('decide', () => {
     it('IT approves a [IT]-only request → immediately APPROVED', async () => {
       const approved = { ...mockPendingRequest, status: RequestStatus.APPROVED };
@@ -224,7 +243,7 @@ describe('AccessRequestService', () => {
       expect(result).toEqual(fullyApproved);
     });
 
-    it('denies a PENDING request immediately regardless of role', async () => {
+    it('denies a PENDING request immediately', async () => {
       const denied = { ...mockPendingRequest, status: RequestStatus.DENIED };
       repository.findById.mockResolvedValue(mockPendingRequest);
       repository.update.mockResolvedValue(denied);
@@ -259,7 +278,6 @@ describe('AccessRequestService', () => {
     });
 
     it('ADMIN approves any request → immediate APPROVED override', async () => {
-      // Even a [MANAGER, IT] request gets immediately approved by ADMIN
       const approved = { ...mockMultiApprovalRequest, status: RequestStatus.APPROVED };
       repository.findById.mockResolvedValue(mockMultiApprovalRequest);
       repository.update.mockResolvedValue(approved);
@@ -306,39 +324,6 @@ describe('AccessRequestService', () => {
       );
     });
 
-    it('throws AppError 403 when an EMPLOYEE calls decide', async () => {
-      await expect(
-        service.decide(mockPendingRequest.id, { decision: RequestStatus.APPROVED }, mockEmployeePayload)
-      ).rejects.toThrow(
-        expect.objectContaining({
-          statusCode: 403,
-          message: `Access denied: role '${Role.EMPLOYEE}' does not have permission '${Permission.ACCESS_REQUEST_DECIDE}'`,
-        })
-      );
-    });
-
-    it('throws AppError 403 when IT tries to approve an [HR]-only request', async () => {
-      const hrRequest = {
-        ...mockPendingRequest,
-        id: 'req-hr-001',
-        applicationName: 'HiBob',
-        requiredApprovals: [Role.HR],
-      };
-      repository.findById.mockResolvedValue(hrRequest);
-
-      await expect(
-        service.decide(hrRequest.id, { decision: RequestStatus.APPROVED }, mockITPayload)
-      ).rejects.toThrow(expect.objectContaining({ statusCode: 403 }));
-    });
-
-    it('throws AppError 403 when HR tries to approve a [IT]-only tech request', async () => {
-      repository.findById.mockResolvedValue(mockPendingRequest); // requiredApprovals: [Role.IT]
-
-      await expect(
-        service.decide(mockPendingRequest.id, { decision: RequestStatus.APPROVED }, mockHRPayload)
-      ).rejects.toThrow(expect.objectContaining({ statusCode: 403 }));
-    });
-
     it('throws AppError 409 when the same role tries to approve twice', async () => {
       // MANAGER has already approved in mockPartiallyApprovedRequest
       repository.findById.mockResolvedValue(mockPartiallyApprovedRequest);
@@ -375,64 +360,46 @@ describe('AccessRequestService', () => {
     it('does not call repository.update when the request is already APPROVED', async () => {
       repository.findById.mockResolvedValue(mockApprovedRequest);
 
-      await service.decide(mockApprovedRequest.id, { decision: RequestStatus.DENIED }, mockITPayload)
+      await service
+        .decide(mockApprovedRequest.id, { decision: RequestStatus.DENIED }, mockITPayload)
         .catch(() => {});
 
       expect(repository.update).not.toHaveBeenCalled();
     });
   });
 
-  // ── getByUser ──────────────────────────────────────────────────────────────
+  // ── getByUser ────────────────────────────────────────────────────────────────
   describe('getByUser', () => {
-    it('returns requests for an EMPLOYEE viewing their own userId', async () => {
+    it('returns requests for the given userId', async () => {
       repository.findByUserId.mockResolvedValue([mockPendingRequest]);
 
-      const result = await service.getByUser(mockEmployeePayload.sub, mockEmployeePayload);
+      const result = await service.getByUser(mockEmployeePayload.sub);
 
       expect(repository.findByUserId).toHaveBeenCalledWith(mockEmployeePayload.sub);
-      expect(result).toEqual([mockPendingRequest]);
-    });
-
-    it('throws AppError 403 when an EMPLOYEE tries to view another user\'s requests', async () => {
-      await expect(
-        service.getByUser('other-user-id', mockEmployeePayload)
-      ).rejects.toThrow(
-        expect.objectContaining({
-          statusCode: 403,
-          message: 'You can only view your own access requests',
-        })
-      );
-    });
-
-    it('does not call the repository when the EMPLOYEE is blocked by the 403 guard', async () => {
-      await service.getByUser('other-user-id', mockEmployeePayload).catch(() => {});
-      expect(repository.findByUserId).not.toHaveBeenCalled();
-    });
-
-    it('allows an IT user to view any user\'s requests', async () => {
-      repository.findByUserId.mockResolvedValue([mockPendingRequest]);
-
-      const result = await service.getByUser('user-alice-001', mockITPayload);
-
-      expect(repository.findByUserId).toHaveBeenCalledWith('user-alice-001');
       expect(result).toEqual([mockPendingRequest]);
     });
 
     it('returns an empty array when the user has no requests', async () => {
       repository.findByUserId.mockResolvedValue([]);
 
-      const result = await service.getByUser(mockEmployeePayload.sub, mockEmployeePayload);
+      const result = await service.getByUser(mockEmployeePayload.sub);
 
       expect(result).toEqual([]);
     });
+
+    it('accepts any userId without restriction — ownership is enforced by the resolver', async () => {
+      repository.findByUserId.mockResolvedValue([mockPendingRequest]);
+
+      await expect(service.getByUser('any-other-user-id')).resolves.toBeDefined();
+    });
   });
 
-  // ── getByStatus ────────────────────────────────────────────────────────────
+  // ── getByStatus ──────────────────────────────────────────────────────────────
   describe('getByStatus', () => {
-    it('returns PENDING requests for an IT user', async () => {
+    it('returns PENDING requests', async () => {
       repository.findByStatus.mockResolvedValue([mockPendingRequest]);
 
-      const result = await service.getByStatus(RequestStatus.PENDING, mockITPayload);
+      const result = await service.getByStatus(RequestStatus.PENDING);
 
       expect(repository.findByStatus).toHaveBeenCalledWith(RequestStatus.PENDING);
       expect(result).toEqual([mockPendingRequest]);
@@ -441,32 +408,16 @@ describe('AccessRequestService', () => {
     it('returns PARTIALLY_APPROVED requests', async () => {
       repository.findByStatus.mockResolvedValue([mockPartiallyApprovedRequest]);
 
-      const result = await service.getByStatus(RequestStatus.PARTIALLY_APPROVED, mockITPayload);
+      const result = await service.getByStatus(RequestStatus.PARTIALLY_APPROVED);
 
       expect(repository.findByStatus).toHaveBeenCalledWith(RequestStatus.PARTIALLY_APPROVED);
       expect(result).toEqual([mockPartiallyApprovedRequest]);
     });
 
-    it('throws AppError 403 when an EMPLOYEE calls getByStatus', async () => {
-      await expect(
-        service.getByStatus(RequestStatus.PENDING, mockEmployeePayload)
-      ).rejects.toThrow(
-        expect.objectContaining({
-          statusCode: 403,
-          message: `Access denied: role '${Role.EMPLOYEE}' does not have permission '${Permission.ACCESS_REQUEST_VIEW_BY_STATUS}'`,
-        })
-      );
-    });
-
-    it('does not call the repository when the EMPLOYEE is blocked', async () => {
-      await service.getByStatus(RequestStatus.PENDING, mockEmployeePayload).catch(() => {});
-      expect(repository.findByStatus).not.toHaveBeenCalled();
-    });
-
     it('works for APPROVED status', async () => {
       repository.findByStatus.mockResolvedValue([mockApprovedRequest]);
 
-      const result = await service.getByStatus(RequestStatus.APPROVED, mockITPayload);
+      const result = await service.getByStatus(RequestStatus.APPROVED);
 
       expect(repository.findByStatus).toHaveBeenCalledWith(RequestStatus.APPROVED);
       expect(result).toEqual([mockApprovedRequest]);
@@ -475,44 +426,56 @@ describe('AccessRequestService', () => {
     it('works for DENIED status', async () => {
       repository.findByStatus.mockResolvedValue([mockDeniedRequest]);
 
-      const result = await service.getByStatus(RequestStatus.DENIED, mockITPayload);
+      const result = await service.getByStatus(RequestStatus.DENIED);
 
       expect(result).toEqual([mockDeniedRequest]);
     });
   });
 
-  // ── getAll ─────────────────────────────────────────────────────────────────
+  // ── getAll ───────────────────────────────────────────────────────────────────
   describe('getAll', () => {
-    it('returns all requests for an IT user', async () => {
+    it('returns all requests', async () => {
       const all = [mockPendingRequest, mockApprovedRequest, mockDeniedRequest];
       repository.findAll.mockResolvedValue(all);
 
-      const result = await service.getAll(mockITPayload);
+      const result = await service.getAll();
 
       expect(repository.findAll).toHaveBeenCalled();
       expect(result).toEqual(all);
     });
 
-    it('throws AppError 403 when an EMPLOYEE calls getAll', async () => {
-      await expect(service.getAll(mockEmployeePayload)).rejects.toThrow(
-        expect.objectContaining({
-          statusCode: 403,
-          message: `Access denied: role '${Role.EMPLOYEE}' does not have permission '${Permission.ACCESS_REQUEST_VIEW_ALL}'`,
-        })
-      );
-    });
-
-    it('does not call the repository when the EMPLOYEE is blocked', async () => {
-      await service.getAll(mockEmployeePayload).catch(() => {});
-      expect(repository.findAll).not.toHaveBeenCalled();
-    });
-
     it('returns an empty array when there are no requests', async () => {
       repository.findAll.mockResolvedValue([]);
 
-      const result = await service.getAll(mockITPayload);
+      const result = await service.getAll();
 
       expect(result).toEqual([]);
+    });
+  });
+
+  // ── getById ──────────────────────────────────────────────────────────────────
+  describe('getById', () => {
+    it('returns the request when found', async () => {
+      repository.findById.mockResolvedValue(mockPendingRequest);
+
+      const result = await service.getById(mockPendingRequest.id);
+
+      expect(repository.findById).toHaveBeenCalledWith(mockPendingRequest.id);
+      expect(result).toEqual(mockPendingRequest);
+    });
+
+    it('throws AppError 404 when the request does not exist', async () => {
+      repository.findById.mockResolvedValue(null);
+
+      await expect(service.getById('non-existent')).rejects.toThrow(
+        expect.objectContaining({ statusCode: 404 })
+      );
+    });
+
+    it('does not enforce ownership — visibility is enforced by the resolver', async () => {
+      repository.findById.mockResolvedValue(mockPendingRequest);
+
+      await expect(service.getById(mockPendingRequest.id)).resolves.toEqual(mockPendingRequest);
     });
   });
 });

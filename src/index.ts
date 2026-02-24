@@ -13,7 +13,7 @@ import type { GraphQLContext } from './graphql/context';
 
 async function bootstrap(): Promise<void> {
   // Populate in-memory store before the server starts accepting connections
-  await seedData(container.authService, container.accessRequestRepository);
+  await seedData(container.userRepository, container.accessRequestRepository);
 
   // ── GraphQL / Apollo Server ─────────────────────────────────────────────
   const apolloServer = new ApolloServer<GraphQLContext>({ typeDefs, resolvers });
@@ -58,9 +58,12 @@ async function bootstrap(): Promise<void> {
           body: req.body,
         },
         context: async () => ({
+          req,
+          res,
           actor,
           accessRequestService: container.accessRequestService,
           authService: container.authService,
+          authorizationService: container.authorizationService,
           riskAssessmentAgent: container.riskAssessmentAgent,
         }),
       });

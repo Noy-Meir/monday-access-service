@@ -2,14 +2,30 @@
  * GraphQL Resolver Tests
  *
  * Uses ApolloServer.executeOperation() to test the full resolver pipeline
- * (schema validation → variable coercion → resolver → serialisation) without
- * spinning up an HTTP server.  All service dependencies are replaced with
- * jest mocks so each test is fully isolated from business-logic internals.
+ * (schema → variable coercion → authorization → resolver → serialisation)
+ * without spinning up an HTTP server.
+ *
+ * Authorization is now enforced entirely at the resolver layer.
+ * Tests use the REAL AuthorizationService (it is pure & stateless) so that
+ * RBAC logic is exercised end-to-end without mocking internals.
+ * All *service* methods (getByUser, getAll, decide, …) are jest mocks so
+ * each test stays isolated from domain logic already covered in
+ * AccessRequestService.test.ts.
  */
 import { ApolloServer } from '@apollo/server';
+import type { Request, Response } from 'express';
 import { typeDefs } from '../../src/graphql/typeDefs';
 import { resolvers } from '../../src/graphql/resolvers';
 import type { GraphQLContext } from '../../src/graphql/context';
+import { AuthorizationService } from '../../src/services/AuthorizationService';
+
+// Rate limiters always pass through in unit tests — their behaviour is an
+// integration concern tested separately (or manually via the .http files).
+jest.mock('../../src/middleware/rateLimiter.middleware', () => ({
+  authRateLimiter: jest.fn((_req: unknown, _res: unknown, next: (err?: unknown) => void) => next()),
+  createRequestRateLimiter: jest.fn((_req: unknown, _res: unknown, next: (err?: unknown) => void) => next()),
+  generalRateLimiter: jest.fn((_req: unknown, _res: unknown, next: (err?: unknown) => void) => next()),
+}));
 import { RequestStatus, Role, TokenPayload } from '../../src/models/AccessRequest';
 import { AppError } from '../../src/utils/AppError';
 import {
@@ -27,27 +43,31 @@ import {
 
 // ── Test helpers ───────────────────────────────────────────────────────────────
 
-/** Creates a fresh ApolloServer backed by the real schema + resolvers. */
 function buildTestServer(): ApolloServer<GraphQLContext> {
   return new ApolloServer<GraphQLContext>({ typeDefs, resolvers });
 }
 
 /**
- * Creates a mock GraphQLContext.  Every service method is a fresh jest.fn()
- * so tests can configure only what they need without any shared state.
+ * Creates a mock GraphQLContext.
+ *
+ * authorizationService is the REAL implementation — it is pure/stateless and
+ * drives FORBIDDEN errors in tests naturally from the actor's role.
+ * All *service* methods are fresh jest.fn() instances per test.
  */
 function buildMockContext(
   actor: TokenPayload | null = null,
   overrides: Partial<GraphQLContext> = {}
 ): GraphQLContext {
   return {
+    req: {} as Request,
+    res: {} as Response,
     actor,
+    authorizationService: new AuthorizationService(),
     authService: {
       login: jest.fn(),
       verifyToken: jest.fn(),
       findUserById: jest.fn(),
       getUserRole: jest.fn(),
-      registerUser: jest.fn(),
     } as unknown as GraphQLContext['authService'],
     accessRequestService: {
       create: jest.fn(),
@@ -66,9 +86,8 @@ function buildMockContext(
 
 /**
  * Unwraps a singleResult from an executeOperation response.
- * Throws if the response is unexpectedly multi-part (incremental delivery).
- * data is cast to Record<string, any> so tests can access resolver-specific
- * fields without fighting the generic `Record<string, unknown>` return type.
+ * data is cast to Record<string, any> to access resolver-specific fields
+ * without fighting the generic Record<string, unknown> return type.
  */
 function unwrap(
   response: Awaited<ReturnType<ApolloServer<GraphQLContext>['executeOperation']>>
@@ -228,7 +247,7 @@ describe('GraphQL Resolvers', () => {
     });
 
     it('does not require an actor — login is a public endpoint', async () => {
-      const ctx = buildMockContext(null); // no actor
+      const ctx = buildMockContext(null);
       (ctx.authService.login as jest.Mock).mockResolvedValue({
         token: 'tok',
         user: { id: mockUser.id, email: mockUser.email, name: mockUser.name, role: mockUser.role },
@@ -265,12 +284,7 @@ describe('GraphQL Resolvers', () => {
       const ctx = buildMockContext();
       (ctx.authService.login as jest.Mock).mockResolvedValue({
         token: 'tok',
-        user: {
-          id: mockITPayload.sub,
-          email: mockITPayload.email,
-          name: mockITPayload.name,
-          role: Role.IT,
-        },
+        user: { id: mockITPayload.sub, email: mockITPayload.email, name: mockITPayload.name, role: Role.IT },
       });
 
       const { data, errors } = unwrap(
@@ -301,7 +315,23 @@ describe('GraphQL Resolvers', () => {
       expect(errors![0].extensions?.code).toBe('UNAUTHENTICATED');
     });
 
-    it('returns serialized requests for an authenticated user', async () => {
+    it('returns FORBIDDEN when EMPLOYEE queries another user\'s requests', async () => {
+      const ctx = buildMockContext(mockEmployeePayload);
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: MY_REQUESTS_QUERY, variables: { userId: 'other-user-id' } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('FORBIDDEN');
+      // Service must never be called — the resolver gate fires first
+      expect(ctx.accessRequestService.getByUser).not.toHaveBeenCalled();
+    });
+
+    it('EMPLOYEE can query their own requests', async () => {
       const ctx = buildMockContext(mockEmployeePayload);
       (ctx.accessRequestService.getByUser as jest.Mock).mockResolvedValue([mockPendingRequest]);
 
@@ -315,7 +345,34 @@ describe('GraphQL Resolvers', () => {
       expect(errors).toBeUndefined();
       expect(data?.myRequests).toHaveLength(1);
       expect(data?.myRequests[0].id).toBe(mockPendingRequest.id);
-      expect(data?.myRequests[0].applicationName).toBe(mockPendingRequest.applicationName);
+    });
+
+    it('approver (IT) can query any user\'s requests', async () => {
+      const ctx = buildMockContext(mockITPayload);
+      (ctx.accessRequestService.getByUser as jest.Mock).mockResolvedValue([mockPendingRequest]);
+
+      const { data, errors } = unwrap(
+        await server.executeOperation(
+          { query: MY_REQUESTS_QUERY, variables: { userId: mockEmployeePayload.sub } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeUndefined();
+      expect(data?.myRequests).toHaveLength(1);
+    });
+
+    it('passes only userId to the service (no actor param)', async () => {
+      const ctx = buildMockContext(mockEmployeePayload);
+      (ctx.accessRequestService.getByUser as jest.Mock).mockResolvedValue([]);
+
+      await server.executeOperation(
+        { query: MY_REQUESTS_QUERY, variables: { userId: mockEmployeePayload.sub } },
+        { contextValue: ctx }
+      );
+
+      expect(ctx.accessRequestService.getByUser).toHaveBeenCalledWith(mockEmployeePayload.sub);
+      expect(ctx.accessRequestService.getByUser).toHaveBeenCalledTimes(1);
     });
 
     it('serializes createdAt Date to an ISO string', async () => {
@@ -343,22 +400,8 @@ describe('GraphQL Resolvers', () => {
         )
       );
 
-      const expectedISO = mockApprovedRequest.approvals[0].approvedAt.toISOString();
-      expect(data?.myRequests[0].approvals[0].approvedAt).toBe(expectedISO);
-    });
-
-    it('passes userId and actor to the service', async () => {
-      const ctx = buildMockContext(mockEmployeePayload);
-      (ctx.accessRequestService.getByUser as jest.Mock).mockResolvedValue([]);
-
-      await server.executeOperation(
-        { query: MY_REQUESTS_QUERY, variables: { userId: mockEmployeePayload.sub } },
-        { contextValue: ctx }
-      );
-
-      expect(ctx.accessRequestService.getByUser).toHaveBeenCalledWith(
-        mockEmployeePayload.sub,
-        mockEmployeePayload
+      expect(data?.myRequests[0].approvals[0].approvedAt).toBe(
+        mockApprovedRequest.approvals[0].approvedAt.toISOString()
       );
     });
 
@@ -374,23 +417,6 @@ describe('GraphQL Resolvers', () => {
       );
 
       expect(data?.myRequests).toEqual([]);
-    });
-
-    it('propagates a 403 AppError when EMPLOYEE requests another user\'s data', async () => {
-      const ctx = buildMockContext(mockEmployeePayload);
-      (ctx.accessRequestService.getByUser as jest.Mock).mockRejectedValue(
-        new AppError('You can only view your own access requests', 403)
-      );
-
-      const { errors } = unwrap(
-        await server.executeOperation(
-          { query: MY_REQUESTS_QUERY, variables: { userId: 'other-user-id' } },
-          { contextValue: ctx }
-        )
-      );
-
-      expect(errors).toBeDefined();
-      expect(errors![0].message).toBe('You can only view your own access requests');
     });
 
     it('returns multiple requests', async () => {
@@ -424,6 +450,18 @@ describe('GraphQL Resolvers', () => {
       expect(errors![0].extensions?.code).toBe('UNAUTHENTICATED');
     });
 
+    it('returns FORBIDDEN when EMPLOYEE calls allRequests', async () => {
+      const ctx = buildMockContext(mockEmployeePayload);
+
+      const { errors } = unwrap(
+        await server.executeOperation({ query: ALL_REQUESTS_QUERY }, { contextValue: ctx })
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('FORBIDDEN');
+      expect(ctx.accessRequestService.getAll).not.toHaveBeenCalled();
+    });
+
     it('returns all requests for an authenticated approver', async () => {
       const ctx = buildMockContext(mockITPayload);
       (ctx.accessRequestService.getAll as jest.Mock).mockResolvedValue([
@@ -440,13 +478,13 @@ describe('GraphQL Resolvers', () => {
       expect(data?.allRequests).toHaveLength(3);
     });
 
-    it('passes actor to the service', async () => {
+    it('calls getAll with no arguments (service has no actor dependency)', async () => {
       const ctx = buildMockContext(mockITPayload);
       (ctx.accessRequestService.getAll as jest.Mock).mockResolvedValue([]);
 
       await server.executeOperation({ query: ALL_REQUESTS_QUERY }, { contextValue: ctx });
 
-      expect(ctx.accessRequestService.getAll).toHaveBeenCalledWith(mockITPayload);
+      expect(ctx.accessRequestService.getAll).toHaveBeenCalledWith();
     });
 
     it('serializes createdAt Date fields', async () => {
@@ -458,23 +496,6 @@ describe('GraphQL Resolvers', () => {
       );
 
       expect(data?.allRequests[0].createdAt).toBe(mockPendingRequest.createdAt.toISOString());
-    });
-
-    it('propagates a 403 AppError when EMPLOYEE calls allRequests', async () => {
-      const ctx = buildMockContext(mockEmployeePayload);
-      (ctx.accessRequestService.getAll as jest.Mock).mockRejectedValue(
-        new AppError(
-          `Access denied: role '${Role.EMPLOYEE}' does not have permission 'access_request:view:all'`,
-          403
-        )
-      );
-
-      const { errors } = unwrap(
-        await server.executeOperation({ query: ALL_REQUESTS_QUERY }, { contextValue: ctx })
-      );
-
-      expect(errors).toBeDefined();
-      expect(errors![0].message).toContain('Access denied');
     });
 
     it('returns an empty array when there are no requests', async () => {
@@ -505,7 +526,22 @@ describe('GraphQL Resolvers', () => {
       expect(errors![0].extensions?.code).toBe('UNAUTHENTICATED');
     });
 
-    it('returns PENDING requests', async () => {
+    it('returns FORBIDDEN when EMPLOYEE calls requestsByStatus', async () => {
+      const ctx = buildMockContext(mockEmployeePayload);
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: REQUESTS_BY_STATUS_QUERY, variables: { status: 'PENDING' } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('FORBIDDEN');
+      expect(ctx.accessRequestService.getByStatus).not.toHaveBeenCalled();
+    });
+
+    it('returns PENDING requests for an approver', async () => {
       const ctx = buildMockContext(mockITPayload);
       (ctx.accessRequestService.getByStatus as jest.Mock).mockResolvedValue([mockPendingRequest]);
 
@@ -522,9 +558,7 @@ describe('GraphQL Resolvers', () => {
 
     it('returns PARTIALLY_APPROVED requests', async () => {
       const ctx = buildMockContext(mockITPayload);
-      (ctx.accessRequestService.getByStatus as jest.Mock).mockResolvedValue([
-        mockPartiallyApprovedRequest,
-      ]);
+      (ctx.accessRequestService.getByStatus as jest.Mock).mockResolvedValue([mockPartiallyApprovedRequest]);
 
       const { data } = unwrap(
         await server.executeOperation(
@@ -564,7 +598,7 @@ describe('GraphQL Resolvers', () => {
       expect(data?.requestsByStatus[0].status).toBe('DENIED');
     });
 
-    it('passes status enum value and actor to the service', async () => {
+    it('passes only status to the service (no actor param)', async () => {
       const ctx = buildMockContext(mockITPayload);
       (ctx.accessRequestService.getByStatus as jest.Mock).mockResolvedValue([]);
 
@@ -573,33 +607,10 @@ describe('GraphQL Resolvers', () => {
         { contextValue: ctx }
       );
 
-      expect(ctx.accessRequestService.getByStatus).toHaveBeenCalledWith(
-        RequestStatus.PENDING,
-        mockITPayload
-      );
+      expect(ctx.accessRequestService.getByStatus).toHaveBeenCalledWith(RequestStatus.PENDING);
     });
 
-    it('propagates a 403 AppError when EMPLOYEE calls requestsByStatus', async () => {
-      const ctx = buildMockContext(mockEmployeePayload);
-      (ctx.accessRequestService.getByStatus as jest.Mock).mockRejectedValue(
-        new AppError(
-          `Access denied: role '${Role.EMPLOYEE}' does not have permission 'access_request:view:by_status'`,
-          403
-        )
-      );
-
-      const { errors } = unwrap(
-        await server.executeOperation(
-          { query: REQUESTS_BY_STATUS_QUERY, variables: { status: 'PENDING' } },
-          { contextValue: ctx }
-        )
-      );
-
-      expect(errors).toBeDefined();
-      expect(errors![0].message).toContain('Access denied');
-    });
-
-    it('rejects an invalid status value at the schema level', async () => {
+    it('rejects an invalid status value at the schema level before reaching the resolver', async () => {
       const ctx = buildMockContext(mockITPayload);
 
       const { errors } = unwrap(
@@ -610,15 +621,12 @@ describe('GraphQL Resolvers', () => {
       );
 
       expect(errors).toBeDefined();
-      // Schema-level coercion failure — resolver is never called
       expect(ctx.accessRequestService.getByStatus).not.toHaveBeenCalled();
     });
 
     it('serializes approvals[].approvedAt Date in results', async () => {
       const ctx = buildMockContext(mockITPayload);
-      (ctx.accessRequestService.getByStatus as jest.Mock).mockResolvedValue([
-        mockPartiallyApprovedRequest,
-      ]);
+      (ctx.accessRequestService.getByStatus as jest.Mock).mockResolvedValue([mockPartiallyApprovedRequest]);
 
       const { data } = unwrap(
         await server.executeOperation(
@@ -627,8 +635,9 @@ describe('GraphQL Resolvers', () => {
         )
       );
 
-      const expectedISO = mockPartiallyApprovedRequest.approvals[0].approvedAt.toISOString();
-      expect(data?.requestsByStatus[0].approvals[0].approvedAt).toBe(expectedISO);
+      expect(data?.requestsByStatus[0].approvals[0].approvedAt).toBe(
+        mockPartiallyApprovedRequest.approvals[0].approvedAt.toISOString()
+      );
     });
   });
 
@@ -640,12 +649,7 @@ describe('GraphQL Resolvers', () => {
       riskLevel: 'LOW' as const,
       reasoning: 'Low-risk application with adequate justification.',
       assessedAt: new Date('2024-01-15T12:00:00Z'),
-      metrics: {
-        executionTimeMs: 42,
-        provider: 'mock',
-        tokensUsed: undefined,
-        modelId: undefined,
-      },
+      metrics: { executionTimeMs: 42, provider: 'mock', tokensUsed: undefined, modelId: undefined },
     };
 
     it('returns UNAUTHENTICATED when no actor is present', async () => {
@@ -662,8 +666,27 @@ describe('GraphQL Resolvers', () => {
       expect(errors![0].extensions?.code).toBe('UNAUTHENTICATED');
     });
 
-    it('returns the risk assessment result for an authenticated user', async () => {
+    it('returns FORBIDDEN when EMPLOYEE tries to assess another user\'s request', async () => {
       const ctx = buildMockContext(mockEmployeePayload);
+      // Request belongs to a different user
+      const otherUsersRequest = { ...mockPendingRequest, createdBy: 'other-user-id' };
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(otherUsersRequest);
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: otherUsersRequest.id } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('FORBIDDEN');
+      expect(ctx.riskAssessmentAgent.assess).not.toHaveBeenCalled();
+    });
+
+    it('EMPLOYEE can assess their own request', async () => {
+      const ctx = buildMockContext(mockEmployeePayload);
+      // createdBy matches the employee's sub
       (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
       (ctx.riskAssessmentAgent.assess as jest.Mock).mockResolvedValue(mockAssessmentResult);
 
@@ -675,10 +698,25 @@ describe('GraphQL Resolvers', () => {
       );
 
       expect(errors).toBeUndefined();
-      expect(data?.riskAssessment.requestId).toBe(mockPendingRequest.id);
       expect(data?.riskAssessment.score).toBe(8);
       expect(data?.riskAssessment.riskLevel).toBe('LOW');
-      expect(data?.riskAssessment.reasoning).toBe(mockAssessmentResult.reasoning);
+    });
+
+    it('approver (IT) can assess any request', async () => {
+      const ctx = buildMockContext(mockITPayload);
+      // Request belongs to a different user — approver can still see it
+      const otherUsersRequest = { ...mockPendingRequest, createdBy: 'someone-else' };
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(otherUsersRequest);
+      (ctx.riskAssessmentAgent.assess as jest.Mock).mockResolvedValue(mockAssessmentResult);
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: otherUsersRequest.id } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeUndefined();
     });
 
     it('serializes assessedAt Date to an ISO string', async () => {
@@ -696,7 +734,7 @@ describe('GraphQL Resolvers', () => {
       expect(data?.riskAssessment.assessedAt).toBe('2024-01-15T12:00:00.000Z');
     });
 
-    it('calls getById then assess with the retrieved request', async () => {
+    it('calls getById then assess — passes only requestId to getById (no actor param)', async () => {
       const ctx = buildMockContext(mockEmployeePayload);
       (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
       (ctx.riskAssessmentAgent.assess as jest.Mock).mockResolvedValue(mockAssessmentResult);
@@ -706,10 +744,7 @@ describe('GraphQL Resolvers', () => {
         { contextValue: ctx }
       );
 
-      expect(ctx.accessRequestService.getById).toHaveBeenCalledWith(
-        mockPendingRequest.id,
-        mockEmployeePayload
-      );
+      expect(ctx.accessRequestService.getById).toHaveBeenCalledWith(mockPendingRequest.id);
       expect(ctx.riskAssessmentAgent.assess).toHaveBeenCalledWith(mockPendingRequest);
     });
 
@@ -746,23 +781,6 @@ describe('GraphQL Resolvers', () => {
       expect(errors![0].message).toBe('Request not found');
     });
 
-    it('propagates a 403 AppError when the user cannot view the request', async () => {
-      const ctx = buildMockContext(mockEmployeePayload);
-      (ctx.accessRequestService.getById as jest.Mock).mockRejectedValue(
-        new AppError('Not authorized to view this request', 403)
-      );
-
-      const { errors } = unwrap(
-        await server.executeOperation(
-          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: 'req-other-001' } },
-          { contextValue: ctx }
-        )
-      );
-
-      expect(errors).toBeDefined();
-      expect(errors![0].message).toBe('Not authorized to view this request');
-    });
-
     it('propagates an agent error when the AI assessment fails', async () => {
       const ctx = buildMockContext(mockEmployeePayload);
       (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
@@ -789,10 +807,7 @@ describe('GraphQL Resolvers', () => {
 
       const { errors } = unwrap(
         await server.executeOperation(
-          {
-            query: CREATE_REQUEST_MUTATION,
-            variables: { applicationName: 'GitHub', justification: 'Need access.' },
-          },
+          { query: CREATE_REQUEST_MUTATION, variables: { applicationName: 'GitHub', justification: 'Need access.' } },
           { contextValue: ctx }
         )
       );
@@ -807,10 +822,7 @@ describe('GraphQL Resolvers', () => {
 
       const { data, errors } = unwrap(
         await server.executeOperation(
-          {
-            query: CREATE_REQUEST_MUTATION,
-            variables: { applicationName: 'GitHub', justification: 'Need access for Q3.' },
-          },
+          { query: CREATE_REQUEST_MUTATION, variables: { applicationName: 'GitHub', justification: 'Need access for Q3.' } },
           { contextValue: ctx }
         )
       );
@@ -827,10 +839,7 @@ describe('GraphQL Resolvers', () => {
 
       const { data } = unwrap(
         await server.executeOperation(
-          {
-            query: CREATE_REQUEST_MUTATION,
-            variables: { applicationName: 'GitHub', justification: 'Need access.' },
-          },
+          { query: CREATE_REQUEST_MUTATION, variables: { applicationName: 'GitHub', justification: 'Need access.' } },
           { contextValue: ctx }
         )
       );
@@ -843,10 +852,7 @@ describe('GraphQL Resolvers', () => {
       (ctx.accessRequestService.create as jest.Mock).mockResolvedValue(mockPendingRequest);
 
       await server.executeOperation(
-        {
-          query: CREATE_REQUEST_MUTATION,
-          variables: { applicationName: 'GitHub', justification: 'Need access for Q3.' },
-        },
+        { query: CREATE_REQUEST_MUTATION, variables: { applicationName: 'GitHub', justification: 'Need access for Q3.' } },
         { contextValue: ctx }
       );
 
@@ -862,10 +868,7 @@ describe('GraphQL Resolvers', () => {
 
       const { data } = unwrap(
         await server.executeOperation(
-          {
-            query: CREATE_REQUEST_MUTATION,
-            variables: { applicationName: 'Database Access', justification: 'Incident investigation.' },
-          },
+          { query: CREATE_REQUEST_MUTATION, variables: { applicationName: 'Database Access', justification: 'Incident investigation.' } },
           { contextValue: ctx }
         )
       );
@@ -879,10 +882,7 @@ describe('GraphQL Resolvers', () => {
 
       const { data } = unwrap(
         await server.executeOperation(
-          {
-            query: CREATE_REQUEST_MUTATION,
-            variables: { applicationName: 'GitHub', justification: 'Need access.' },
-          },
+          { query: CREATE_REQUEST_MUTATION, variables: { applicationName: 'GitHub', justification: 'Need access.' } },
           { contextValue: ctx }
         )
       );
@@ -907,8 +907,43 @@ describe('GraphQL Resolvers', () => {
       expect(errors![0].extensions?.code).toBe('UNAUTHENTICATED');
     });
 
+    it('returns FORBIDDEN when EMPLOYEE attempts to decide (no DECIDE permission)', async () => {
+      const ctx = buildMockContext(mockEmployeePayload);
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: DECIDE_REQUEST_MUTATION, variables: { id: mockPendingRequest.id, decision: 'APPROVED' } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('FORBIDDEN');
+      // Neither getById nor decide should be called — the permission gate fires first
+      expect(ctx.accessRequestService.getById).not.toHaveBeenCalled();
+      expect(ctx.accessRequestService.decide).not.toHaveBeenCalled();
+    });
+
+    it('returns FORBIDDEN when IT tries to approve an HR-only request (role boundary)', async () => {
+      const ctx = buildMockContext(mockITPayload);
+      const hrOnlyRequest = { ...mockPendingRequest, id: 'req-hr-001', applicationName: 'HiBob', requiredApprovals: [Role.HR] };
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(hrOnlyRequest);
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: DECIDE_REQUEST_MUTATION, variables: { id: hrOnlyRequest.id, decision: 'APPROVED' } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('FORBIDDEN');
+      expect(ctx.accessRequestService.decide).not.toHaveBeenCalled();
+    });
+
     it('returns the updated APPROVED request', async () => {
       const ctx = buildMockContext(mockITPayload);
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockResolvedValue(mockApprovedRequest);
 
       const { data, errors } = unwrap(
@@ -924,14 +959,12 @@ describe('GraphQL Resolvers', () => {
 
     it('returns the updated DENIED request', async () => {
       const ctx = buildMockContext(mockITPayload);
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockResolvedValue(mockDeniedRequest);
 
       const { data } = unwrap(
         await server.executeOperation(
-          {
-            query: DECIDE_REQUEST_MUTATION,
-            variables: { id: mockPendingRequest.id, decision: 'DENIED', decisionNote: 'Not justified.' },
-          },
+          { query: DECIDE_REQUEST_MUTATION, variables: { id: mockPendingRequest.id, decision: 'DENIED', decisionNote: 'Not justified.' } },
           { contextValue: ctx }
         )
       );
@@ -941,14 +974,13 @@ describe('GraphQL Resolvers', () => {
 
     it('returns PARTIALLY_APPROVED for the first approval of a multi-step request', async () => {
       const ctx = buildMockContext(mockITPayload);
+      // IT is in [MANAGER, IT] — role boundary passes
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockMultiApprovalRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockResolvedValue(mockPartiallyApprovedRequest);
 
       const { data } = unwrap(
         await server.executeOperation(
-          {
-            query: DECIDE_REQUEST_MUTATION,
-            variables: { id: mockMultiApprovalRequest.id, decision: 'APPROVED' },
-          },
+          { query: DECIDE_REQUEST_MUTATION, variables: { id: mockMultiApprovalRequest.id, decision: 'APPROVED' } },
           { contextValue: ctx }
         )
       );
@@ -956,18 +988,17 @@ describe('GraphQL Resolvers', () => {
       expect(data?.decideRequest.status).toBe('PARTIALLY_APPROVED');
     });
 
-    it('passes id, decision, decisionNote, and actor to the service', async () => {
+    it('pre-fetches the request and passes id, decision, decisionNote, and actor to decide', async () => {
       const ctx = buildMockContext(mockITPayload);
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockResolvedValue(mockApprovedRequest);
 
       await server.executeOperation(
-        {
-          query: DECIDE_REQUEST_MUTATION,
-          variables: { id: mockPendingRequest.id, decision: 'APPROVED', decisionNote: 'LGTM' },
-        },
+        { query: DECIDE_REQUEST_MUTATION, variables: { id: mockPendingRequest.id, decision: 'APPROVED', decisionNote: 'LGTM' } },
         { contextValue: ctx }
       );
 
+      expect(ctx.accessRequestService.getById).toHaveBeenCalledWith(mockPendingRequest.id);
       expect(ctx.accessRequestService.decide).toHaveBeenCalledWith(
         mockPendingRequest.id,
         { decision: RequestStatus.APPROVED, decisionNote: 'LGTM' },
@@ -977,6 +1008,7 @@ describe('GraphQL Resolvers', () => {
 
     it('passes undefined decisionNote when it is omitted from the mutation', async () => {
       const ctx = buildMockContext(mockITPayload);
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockResolvedValue(mockApprovedRequest);
 
       await server.executeOperation(
@@ -993,6 +1025,7 @@ describe('GraphQL Resolvers', () => {
 
     it('serializes decisionAt Date to an ISO string in the response', async () => {
       const ctx = buildMockContext(mockITPayload);
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockResolvedValue(mockApprovedRequest);
 
       const { data } = unwrap(
@@ -1007,6 +1040,7 @@ describe('GraphQL Resolvers', () => {
 
     it('returns null decisionAt for a PARTIALLY_APPROVED request', async () => {
       const ctx = buildMockContext(mockITPayload);
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockMultiApprovalRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockResolvedValue(mockPartiallyApprovedRequest);
 
       const { data } = unwrap(
@@ -1019,47 +1053,10 @@ describe('GraphQL Resolvers', () => {
       expect(data?.decideRequest.decisionAt).toBeNull();
     });
 
-    it('propagates a 403 AppError when role is not in requiredApprovals', async () => {
-      const ctx = buildMockContext(mockITPayload);
-      (ctx.accessRequestService.decide as jest.Mock).mockRejectedValue(
-        new AppError(`Role '${Role.IT}' is not authorized to approve requests for 'HiBob'`, 403)
-      );
-
-      const { errors } = unwrap(
-        await server.executeOperation(
-          { query: DECIDE_REQUEST_MUTATION, variables: { id: 'req-hr-001', decision: 'APPROVED' } },
-          { contextValue: ctx }
-        )
-      );
-
-      expect(errors).toBeDefined();
-      expect(errors![0].message).toContain('IT');
-    });
-
-    it('propagates a 403 AppError when EMPLOYEE attempts to decide', async () => {
-      const ctx = buildMockContext(mockEmployeePayload);
-      (ctx.accessRequestService.decide as jest.Mock).mockRejectedValue(
-        new AppError(
-          `Access denied: role '${Role.EMPLOYEE}' does not have permission 'access_request:decide'`,
-          403
-        )
-      );
-
-      const { errors } = unwrap(
-        await server.executeOperation(
-          { query: DECIDE_REQUEST_MUTATION, variables: { id: mockPendingRequest.id, decision: 'APPROVED' } },
-          { contextValue: ctx }
-        )
-      );
-
-      expect(errors).toBeDefined();
-      expect(errors![0].message).toContain('Access denied');
-    });
-
     it('propagates a 404 AppError when the request does not exist', async () => {
       const ctx = buildMockContext(mockITPayload);
-      (ctx.accessRequestService.decide as jest.Mock).mockRejectedValue(
-        new AppError("Access request 'non-existent' not found", 404)
+      (ctx.accessRequestService.getById as jest.Mock).mockRejectedValue(
+        new AppError('Request not found', 404)
       );
 
       const { errors } = unwrap(
@@ -1075,11 +1072,9 @@ describe('GraphQL Resolvers', () => {
 
     it('propagates a 409 AppError when the request is already finalized', async () => {
       const ctx = buildMockContext(mockITPayload);
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockRejectedValue(
-        new AppError(
-          `Cannot decide on a request with status 'APPROVED'. Only PENDING or PARTIALLY_APPROVED requests can be decided.`,
-          409
-        )
+        new AppError(`Cannot decide on a request with status 'APPROVED'. Only PENDING or PARTIALLY_APPROVED requests can be decided.`, 409)
       );
 
       const { errors } = unwrap(
@@ -1095,16 +1090,15 @@ describe('GraphQL Resolvers', () => {
 
     it('propagates a 409 AppError when the same role tries to approve twice', async () => {
       const ctx = buildMockContext(mockITPayload);
+      // IT is in [MANAGER, IT] — role boundary passes; service detects duplicate
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPartiallyApprovedRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockRejectedValue(
         new AppError(`Role '${Role.IT}' has already approved this request`, 409)
       );
 
       const { errors } = unwrap(
         await server.executeOperation(
-          {
-            query: DECIDE_REQUEST_MUTATION,
-            variables: { id: mockPartiallyApprovedRequest.id, decision: 'APPROVED' },
-          },
+          { query: DECIDE_REQUEST_MUTATION, variables: { id: mockPartiallyApprovedRequest.id, decision: 'APPROVED' } },
           { contextValue: ctx }
         )
       );
@@ -1113,9 +1107,11 @@ describe('GraphQL Resolvers', () => {
       expect(errors![0].message).toContain('already approved');
     });
 
-    it('ADMIN can decide any request — passes ADMIN actor to the service', async () => {
+    it('ADMIN can decide any request — bypasses role boundary check', async () => {
       const ctx = buildMockContext(mockAdminPayload);
       const adminApprovedRequest = { ...mockMultiApprovalRequest, status: RequestStatus.APPROVED };
+      // Even an [MANAGER, IT] request — ADMIN is exempt from role boundary
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockMultiApprovalRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockResolvedValue(adminApprovedRequest);
 
       const { data, errors } = unwrap(
@@ -1134,7 +1130,7 @@ describe('GraphQL Resolvers', () => {
       );
     });
 
-    it('HR can decide HR-only requests — passes HR actor to the service', async () => {
+    it('HR can decide HR-only requests', async () => {
       const hrRequest = {
         ...mockPendingRequest,
         id: 'req-hr-001',
@@ -1144,6 +1140,7 @@ describe('GraphQL Resolvers', () => {
       };
       const approvedHR = { ...hrRequest, status: RequestStatus.APPROVED };
       const ctx = buildMockContext(mockHRPayload);
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(hrRequest);
       (ctx.accessRequestService.decide as jest.Mock).mockResolvedValue(approvedHR);
 
       const { data, errors } = unwrap(

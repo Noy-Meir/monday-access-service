@@ -2,27 +2,39 @@ import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
 
 /**
- * Logs every HTTP request once the response is fully sent.
- *
- * Log level is chosen based on the response status code so that dashboards
- * and alerting tools can filter by severity without parsing the message:
- *   5xx → error  (unexpected failures — page the on-call engineer)
- *   4xx → warn   (client errors — useful for detecting abuse or bad clients)
- *   2xx/3xx → info (normal flow)
+ * Global request logger that captures the full lifecycle of a request.
+ * Logs entry points for visibility and completion for performance (latency) and status.
+ * Specialized to extract GraphQL operation names from the request body.
  */
 export function requestLoggerMiddleware(req: Request, res: Response, next: NextFunction): void {
   const start = Date.now();
+  const { method, path, ip } = req;
+
+  const operationName = req.body?.operationName || 'unknown';
+  const isGraphQL = path === '/graphql';
+  const label = isGraphQL ? `GraphQL: ${operationName}` : `HTTP: ${path}`;
+
+  logger.info(`Incoming ${method} ${label}`, {
+    method,
+    path,
+    operationName: isGraphQL ? operationName : undefined,
+    ip,
+    userAgent: req.get('user-agent'),
+  });
 
   res.on('finish', () => {
+    const durationMs = Date.now() - start;
     const statusCode = res.statusCode;
+
     const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
 
-    logger[level]('HTTP request', {
-      method: req.method,
-      path: req.path,
+    logger[level](`Completed ${method} ${label}`, {
+      method,
+      path,
+      operationName: isGraphQL ? operationName : undefined,
       statusCode,
-      durationMs: Date.now() - start,
-      userId: req.user?.sub ?? 'anonymous',
+      durationMs,
+      userId: (req as any).user?.sub ?? 'anonymous',
     });
   });
 
