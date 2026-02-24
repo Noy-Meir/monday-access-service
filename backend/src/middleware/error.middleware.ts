@@ -35,7 +35,6 @@ export function errorMiddleware(
     return;
   }
 
-  // Unknown / programmer error — log the full stack but never expose it to the client.
   logger.error('Unhandled error', {
     message: err.message,
     stack: err.stack,

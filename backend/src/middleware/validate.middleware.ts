@@ -4,7 +4,7 @@ import { AppError } from '../utils/AppError';
 
 /**
  * Factory that returns a request body validation middleware using a Zod schema.
- * On success, replaces req.body with the parsed (coerced + stripped) output.
+ * On success, replaces req. body with the parsed (coerced + stripped) output.
  * On failure, passes a structured AppError to the global error handler.
  */
 export function createValidateMiddleware(schema: ZodSchema) {

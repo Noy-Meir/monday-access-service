@@ -26,9 +26,6 @@ const APPROVER_PERMISSIONS = new Set([
 /**
  * The authoritative permission matrix.
  * Maps every Role to the exact set of Permissions it is granted.
- *
- * This is the single source of truth for "what can each role do?"
- * Both the authorization middleware and the AuthorizationService read from here.
  */
 export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   [Role.EMPLOYEE]: new Set([

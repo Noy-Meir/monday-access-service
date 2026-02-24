@@ -1,5 +1,5 @@
 {
-  "name": "monday-access-service",
+  "name": "monday-access-service-backend",
   "version": "1.0.0",
   "description": "Production-grade REST API for managing application access requests",
   "main": "dist/index.js",
