@@ -297,6 +297,21 @@ describe('GraphQL Resolvers', () => {
       expect(errors).toBeUndefined();
       expect(data?.login.user.role).toBe('IT');
     });
+
+    it('returns BAD_USER_INPUT for a malformed email address', async () => {
+      const ctx = buildMockContext();
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: LOGIN_MUTATION, variables: { email: 'not-an-email', password: 'Password123!' } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('BAD_USER_INPUT');
+      expect(ctx.authService.login).not.toHaveBeenCalled();
+    });
   });
 
   // ── Query.myRequests ────────────────────────────────────────────────────────
@@ -889,6 +904,36 @@ describe('GraphQL Resolvers', () => {
 
       expect(data?.createRequest.approvals).toEqual([]);
     });
+
+    it('returns BAD_USER_INPUT when applicationName is too short (< 2 chars)', async () => {
+      const ctx = buildMockContext(mockEmployeePayload);
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: CREATE_REQUEST_MUTATION, variables: { applicationName: 'X', justification: 'Need access for the project.' } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('BAD_USER_INPUT');
+      expect(ctx.accessRequestService.create).not.toHaveBeenCalled();
+    });
+
+    it('returns BAD_USER_INPUT when justification is too short (< 10 chars)', async () => {
+      const ctx = buildMockContext(mockEmployeePayload);
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: CREATE_REQUEST_MUTATION, variables: { applicationName: 'GitHub', justification: 'Too short' } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('BAD_USER_INPUT');
+      expect(ctx.accessRequestService.create).not.toHaveBeenCalled();
+    });
   });
 
   // ── Mutation.decideRequest ──────────────────────────────────────────────────
@@ -1157,6 +1202,37 @@ describe('GraphQL Resolvers', () => {
         expect.any(Object),
         mockHRPayload
       );
+    });
+
+    it('returns BAD_USER_INPUT when decision is PENDING (not APPROVED or DENIED)', async () => {
+      const ctx = buildMockContext(mockITPayload);
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: DECIDE_REQUEST_MUTATION, variables: { id: mockPendingRequest.id, decision: 'PENDING' } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('BAD_USER_INPUT');
+      expect(ctx.accessRequestService.decide).not.toHaveBeenCalled();
+    });
+
+    it('returns BAD_USER_INPUT when decisionNote exceeds 500 characters', async () => {
+      const ctx = buildMockContext(mockITPayload);
+      (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
+
+      const { errors } = unwrap(
+        await server.executeOperation(
+          { query: DECIDE_REQUEST_MUTATION, variables: { id: mockPendingRequest.id, decision: 'APPROVED', decisionNote: 'x'.repeat(501) } },
+          { contextValue: ctx }
+        )
+      );
+
+      expect(errors).toBeDefined();
+      expect(errors![0].extensions?.code).toBe('BAD_USER_INPUT');
+      expect(ctx.accessRequestService.decide).not.toHaveBeenCalled();
     });
   });
 });
