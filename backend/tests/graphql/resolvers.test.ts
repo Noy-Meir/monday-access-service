@@ -76,10 +76,8 @@ function buildMockContext(
       getByStatus: jest.fn(),
       getAll: jest.fn(),
       getById: jest.fn(),
+      getAiRiskAssessment: jest.fn(),
     } as unknown as GraphQLContext['accessRequestService'],
-    riskAssessmentAgent: {
-      assess: jest.fn(),
-    } as unknown as GraphQLContext['riskAssessmentAgent'],
     ...overrides,
   };
 }
@@ -151,9 +149,9 @@ const REQUESTS_BY_STATUS_QUERY = `
   }
 `;
 
-const RISK_ASSESSMENT_QUERY = `
-  query RiskAssessment($requestId: ID!) {
-    riskAssessment(requestId: $requestId) {
+const ASSESS_REQUEST_RISK_MUTATION = `
+  mutation AssessRequestRisk($requestId: ID!) {
+    assessRequestRisk(requestId: $requestId) {
       requestId
       score
       riskLevel
@@ -656,8 +654,8 @@ describe('GraphQL Resolvers', () => {
     });
   });
 
-  // ── Query.riskAssessment ────────────────────────────────────────────────────
-  describe('Query.riskAssessment', () => {
+  // ── Mutation.assessRequestRisk ──────────────────────────────────────────────
+  describe('Mutation.assessRequestRisk', () => {
     const mockAssessmentResult = {
       requestId: mockPendingRequest.id,
       score: 8,
@@ -672,7 +670,7 @@ describe('GraphQL Resolvers', () => {
 
       const { errors } = unwrap(
         await server.executeOperation(
-          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: mockPendingRequest.id } },
+          { query: ASSESS_REQUEST_RISK_MUTATION, variables: { requestId: mockPendingRequest.id } },
           { contextValue: ctx }
         )
       );
@@ -683,50 +681,47 @@ describe('GraphQL Resolvers', () => {
 
     it('returns FORBIDDEN when EMPLOYEE tries to assess another user\'s request', async () => {
       const ctx = buildMockContext(mockEmployeePayload);
-      // Request belongs to a different user
       const otherUsersRequest = { ...mockPendingRequest, createdBy: 'other-user-id' };
       (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(otherUsersRequest);
 
       const { errors } = unwrap(
         await server.executeOperation(
-          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: otherUsersRequest.id } },
+          { query: ASSESS_REQUEST_RISK_MUTATION, variables: { requestId: otherUsersRequest.id } },
           { contextValue: ctx }
         )
       );
 
       expect(errors).toBeDefined();
       expect(errors![0].extensions?.code).toBe('FORBIDDEN');
-      expect(ctx.riskAssessmentAgent.assess).not.toHaveBeenCalled();
+      expect(ctx.accessRequestService.getAiRiskAssessment).not.toHaveBeenCalled();
     });
 
     it('EMPLOYEE can assess their own request', async () => {
       const ctx = buildMockContext(mockEmployeePayload);
-      // createdBy matches the employee's sub
       (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
-      (ctx.riskAssessmentAgent.assess as jest.Mock).mockResolvedValue(mockAssessmentResult);
+      (ctx.accessRequestService.getAiRiskAssessment as jest.Mock).mockResolvedValue(mockAssessmentResult);
 
       const { data, errors } = unwrap(
         await server.executeOperation(
-          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: mockPendingRequest.id } },
+          { query: ASSESS_REQUEST_RISK_MUTATION, variables: { requestId: mockPendingRequest.id } },
           { contextValue: ctx }
         )
       );
 
       expect(errors).toBeUndefined();
-      expect(data?.riskAssessment.score).toBe(8);
-      expect(data?.riskAssessment.riskLevel).toBe('LOW');
+      expect(data?.assessRequestRisk.score).toBe(8);
+      expect(data?.assessRequestRisk.riskLevel).toBe('LOW');
     });
 
     it('approver (IT) can assess any request', async () => {
       const ctx = buildMockContext(mockITPayload);
-      // Request belongs to a different user — approver can still see it
       const otherUsersRequest = { ...mockPendingRequest, createdBy: 'someone-else' };
       (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(otherUsersRequest);
-      (ctx.riskAssessmentAgent.assess as jest.Mock).mockResolvedValue(mockAssessmentResult);
+      (ctx.accessRequestService.getAiRiskAssessment as jest.Mock).mockResolvedValue(mockAssessmentResult);
 
       const { errors } = unwrap(
         await server.executeOperation(
-          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: otherUsersRequest.id } },
+          { query: ASSESS_REQUEST_RISK_MUTATION, variables: { requestId: otherUsersRequest.id } },
           { contextValue: ctx }
         )
       );
@@ -737,46 +732,49 @@ describe('GraphQL Resolvers', () => {
     it('serializes assessedAt Date to an ISO string', async () => {
       const ctx = buildMockContext(mockEmployeePayload);
       (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
-      (ctx.riskAssessmentAgent.assess as jest.Mock).mockResolvedValue(mockAssessmentResult);
+      (ctx.accessRequestService.getAiRiskAssessment as jest.Mock).mockResolvedValue(mockAssessmentResult);
 
       const { data } = unwrap(
         await server.executeOperation(
-          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: mockPendingRequest.id } },
+          { query: ASSESS_REQUEST_RISK_MUTATION, variables: { requestId: mockPendingRequest.id } },
           { contextValue: ctx }
         )
       );
 
-      expect(data?.riskAssessment.assessedAt).toBe('2024-01-15T12:00:00.000Z');
+      expect(data?.assessRequestRisk.assessedAt).toBe('2024-01-15T12:00:00.000Z');
     });
 
-    it('calls getById then assess — passes only requestId to getById (no actor param)', async () => {
+    it('calls getById then getAiRiskAssessment with requestId and actor', async () => {
       const ctx = buildMockContext(mockEmployeePayload);
       (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
-      (ctx.riskAssessmentAgent.assess as jest.Mock).mockResolvedValue(mockAssessmentResult);
+      (ctx.accessRequestService.getAiRiskAssessment as jest.Mock).mockResolvedValue(mockAssessmentResult);
 
       await server.executeOperation(
-        { query: RISK_ASSESSMENT_QUERY, variables: { requestId: mockPendingRequest.id } },
+        { query: ASSESS_REQUEST_RISK_MUTATION, variables: { requestId: mockPendingRequest.id } },
         { contextValue: ctx }
       );
 
       expect(ctx.accessRequestService.getById).toHaveBeenCalledWith(mockPendingRequest.id);
-      expect(ctx.riskAssessmentAgent.assess).toHaveBeenCalledWith(mockPendingRequest);
+      expect(ctx.accessRequestService.getAiRiskAssessment).toHaveBeenCalledWith(
+        mockPendingRequest.id,
+        mockEmployeePayload
+      );
     });
 
     it('includes metrics in the response', async () => {
       const ctx = buildMockContext(mockEmployeePayload);
       (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
-      (ctx.riskAssessmentAgent.assess as jest.Mock).mockResolvedValue(mockAssessmentResult);
+      (ctx.accessRequestService.getAiRiskAssessment as jest.Mock).mockResolvedValue(mockAssessmentResult);
 
       const { data } = unwrap(
         await server.executeOperation(
-          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: mockPendingRequest.id } },
+          { query: ASSESS_REQUEST_RISK_MUTATION, variables: { requestId: mockPendingRequest.id } },
           { contextValue: ctx }
         )
       );
 
-      expect(data?.riskAssessment.metrics.executionTimeMs).toBe(42);
-      expect(data?.riskAssessment.metrics.provider).toBe('mock');
+      expect(data?.assessRequestRisk.metrics.executionTimeMs).toBe(42);
+      expect(data?.assessRequestRisk.metrics.provider).toBe('mock');
     });
 
     it('propagates a 404 AppError when the request is not found', async () => {
@@ -787,7 +785,7 @@ describe('GraphQL Resolvers', () => {
 
       const { errors } = unwrap(
         await server.executeOperation(
-          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: 'non-existent-id' } },
+          { query: ASSESS_REQUEST_RISK_MUTATION, variables: { requestId: 'non-existent-id' } },
           { contextValue: ctx }
         )
       );
@@ -796,16 +794,16 @@ describe('GraphQL Resolvers', () => {
       expect(errors![0].message).toBe('Request not found');
     });
 
-    it('propagates an agent error when the AI assessment fails', async () => {
+    it('propagates a service error when the AI assessment fails', async () => {
       const ctx = buildMockContext(mockEmployeePayload);
       (ctx.accessRequestService.getById as jest.Mock).mockResolvedValue(mockPendingRequest);
-      (ctx.riskAssessmentAgent.assess as jest.Mock).mockRejectedValue(
+      (ctx.accessRequestService.getAiRiskAssessment as jest.Mock).mockRejectedValue(
         new AppError('AI provider unavailable', 503)
       );
 
       const { errors } = unwrap(
         await server.executeOperation(
-          { query: RISK_ASSESSMENT_QUERY, variables: { requestId: mockPendingRequest.id } },
+          { query: ASSESS_REQUEST_RISK_MUTATION, variables: { requestId: mockPendingRequest.id } },
           { contextValue: ctx }
         )
       );

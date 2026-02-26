@@ -35,3 +35,12 @@ export const DECIDE_REQUEST_MUTATION = gql`
     }
   }
 `;
+
+export const ASSESS_REQUEST_RISK_MUTATION = gql`
+  mutation AssessRequestRisk($requestId: ID!) {
+    assessRequestRisk(requestId: $requestId) {
+      requestId score riskLevel reasoning assessedAt
+      metrics { executionTimeMs provider tokensUsed modelId }
+    }
+  }
+`;

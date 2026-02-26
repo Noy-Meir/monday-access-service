@@ -20,11 +20,6 @@ import { logger } from './utils/logger';
 const userRepository = new InMemoryUserRepository();
 const accessRequestRepository = new InMemoryAccessRequestRepository();
 
-// ── Services ──────────────────────────────────────────────────────────────────
-const authService = new AuthService(userRepository);
-const authorizationService = new AuthorizationService();
-const accessRequestService = new AccessRequestService(accessRequestRepository);
-
 // ── AI ────────────────────────────────────────────────────────────────────────
 function createAiProvider(): IAiProvider {
   if (config.ai.provider === AiProvider.CLAUDE) {
@@ -39,11 +34,15 @@ function createAiProvider(): IAiProvider {
 
 const riskAssessmentAgent = new RiskAssessmentAgent(createAiProvider());
 
+// ── Services ──────────────────────────────────────────────────────────────────
+const authService = new AuthService(userRepository);
+const authorizationService = new AuthorizationService();
+const accessRequestService = new AccessRequestService(accessRequestRepository, riskAssessmentAgent);
+
 export const container = {
   userRepository,
   accessRequestRepository,
   authService,
   authorizationService,
   accessRequestService,
-  riskAssessmentAgent,
 } as const;

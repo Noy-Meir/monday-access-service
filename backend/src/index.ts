@@ -83,7 +83,6 @@ async function bootstrap(): Promise<void> {
           accessRequestService: container.accessRequestService,
           authService: container.authService,
           authorizationService: container.authorizationService,
-          riskAssessmentAgent: container.riskAssessmentAgent,
         }),
       });
 

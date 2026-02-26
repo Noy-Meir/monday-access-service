@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { AccessRequest, Approval, RequestStatus, Role, TokenPayload } from '../models/AccessRequest';
 import { IAccessRequestRepository } from '../repositories/IAccessRequestRepository';
+import { IRiskAssessmentAgent } from '../modules/ai-agent/agent/IRiskAssessmentAgent';
+import { RiskAssessmentResult } from '../modules/ai-agent/types';
 import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
 import { getRequiredApprovals } from '../config/applications';
@@ -21,7 +23,10 @@ export interface DecideAccessRequestInput {
  * Focuses on: Creation, multi-step flow, audit trails, and state invariants.
  */
 export class AccessRequestService {
-  constructor(private readonly repository: IAccessRequestRepository) {}
+  constructor(
+    private readonly repository: IAccessRequestRepository,
+    private readonly riskAssessmentAgent: IRiskAssessmentAgent,
+  ) {}
 
   /** Creates a new PENDING access request with the correct requiredApprovals. */
   async create(input: CreateAccessRequestInput, actor: TokenPayload): Promise<AccessRequest> {
@@ -165,5 +170,20 @@ export class AccessRequestService {
       throw new AppError('Request not found', 404);
     }
     return request;
+  }
+
+  /**
+   * Runs an AI risk assessment on the request and persists the result.
+   * Advisory only — never changes request.status.
+   */
+  async getAiRiskAssessment(requestId: string, actor: TokenPayload): Promise<RiskAssessmentResult> {
+    const request = await this.repository.findById(requestId);
+    if (!request) throw new AppError('Request not found', 404);
+    const result = await this.riskAssessmentAgent.assess(request);
+    await this.repository.update({ ...request, aiAssessment: result });
+    logger.info('AI risk assessment completed', {
+      requestId, riskLevel: result.riskLevel, triggeredBy: actor.email,
+    });
+    return result;
   }
 }

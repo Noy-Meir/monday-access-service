@@ -1,4 +1,5 @@
 import { AccessRequest, Approval, RequestStatus, Role, TokenPayload, User } from '../../src/models/AccessRequest';
+import { RiskAssessmentResult, RiskLevel } from '../../src/modules/ai-agent/types';
 
 export const mockEmployeePayload: TokenPayload = {
   sub: 'user-alice-001',
@@ -115,4 +116,13 @@ export const mockPartiallyApprovedRequest: AccessRequest = {
       approvedAt: new Date('2024-01-02T09:00:00Z'),
     } as Approval,
   ],
+};
+
+export const mockRiskAssessmentResult: RiskAssessmentResult = {
+  requestId: 'req-pending-001',
+  score: 15,
+  riskLevel: RiskLevel.LOW,
+  reasoning: 'Standard collaboration tool with low security risk.',
+  assessedAt: new Date('2024-01-01T12:00:00Z'),
+  metrics: { executionTimeMs: 120, provider: 'mock' },
 };

@@ -91,13 +91,13 @@ Authorization: Bearer {{auth_token}}
 
 ### [4a] Assess LOW-risk request as Employee
 # Employee assesses their own Slack request.
-# Expected: { "data": { "riskAssessment": { "score": 8, "riskLevel": "LOW", "reasoning": "...", "metrics": { ... } } } }
+# Expected: { "data": { "assessRequestRisk": { "score": 8, "riskLevel": "LOW", "reasoning": "...", "metrics": { ... } } } }
 POST {{graphql}}
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "query": "query RiskAssessment($requestId: ID!) { riskAssessment(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider tokensUsed modelId } } }",
+  "query": "mutation AssessRequestRisk($requestId: ID!) { assessRequestRisk(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider tokensUsed modelId } } }",
   "variables": {
     "requestId": "{{low_risk_request_id}}"
   }

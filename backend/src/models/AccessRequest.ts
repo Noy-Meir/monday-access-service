@@ -1,3 +1,7 @@
+import { RiskAssessmentResult } from '../modules/ai-agent/types';
+
+export { RiskAssessmentResult };
+
 export enum Role {
   EMPLOYEE = 'EMPLOYEE',
   MANAGER  = 'MANAGER',
@@ -43,6 +47,7 @@ export interface AccessRequest {
   decisionByEmail?: string;
   decisionAt?: Date;
   decisionNote?: string;
+  aiAssessment?: RiskAssessmentResult;
 }
 
 /** JWT payload stored inside the signed token */
