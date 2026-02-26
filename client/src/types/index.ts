@@ -47,6 +47,7 @@ export interface AccessRequest {
   decisionByEmail?: string;
   decisionAt?: string;
   decisionNote?: string;
+  aiAssessment?: RiskAssessmentResult;
 }
 
 export interface RiskAssessmentMetrics {

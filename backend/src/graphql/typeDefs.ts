@@ -54,6 +54,7 @@ export const typeDefs = `#graphql
     decisionByEmail: String
     decisionAt: String
     decisionNote: String
+    aiAssessment: RiskAssessmentResult
   }
 
   type RiskAssessmentMetrics {
@@ -82,9 +83,6 @@ export const typeDefs = `#graphql
 
     # Returns requests filtered by status. Requires APPROVER role.
     requestsByStatus(status: RequestStatus!): [AccessRequest!]!
-
-    # Runs an AI risk assessment on the given request.
-    riskAssessment(requestId: ID!): RiskAssessmentResult!
   }
 
   type Mutation {
@@ -100,5 +98,8 @@ export const typeDefs = `#graphql
       decision: RequestStatus!
       decisionNote: String
     ): AccessRequest!
+
+    # Triggers an AI risk assessment and persists the result. Advisory only — does not change status.
+    assessRequestRisk(requestId: ID!): RiskAssessmentResult!
   }
 `;

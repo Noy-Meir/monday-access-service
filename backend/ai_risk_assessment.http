@@ -21,9 +21,8 @@
 @graphql = {{baseUrl}}/graphql
 
 
-# =============================================================================
 # [1] LOGIN — EMPLOYEE
-# =============================================================================
+
 
 ### Login as Employee (alice)
 # Expected: { "data": { "login": { "token": "...", "user": { "role": "EMPLOYEE", ... } } } }
@@ -66,15 +65,10 @@ Content-Type: application/json
   client.log("IT Approver token captured: " + response.body.data.login.token.substring(0, 20) + "...");
 %}
 
-
-# =============================================================================
-# [3] CREATE REQUESTS WITH VARYING RISK LEVELS
-# =============================================================================
+# [3] CREATE REQUESTS
 
 ### [3a] Create LOW-risk request (Employee)
-# "Slack" is a standard shared app → mock provider returns LOW.
-# ID is auto-captured into @low_risk_request_id.
-# Expected: { "data": { "createRequest": { "status": "PENDING", "requiredApprovals": ["IT"], ... } } }
+
 POST {{graphql}}
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
@@ -92,115 +86,18 @@ Authorization: Bearer {{auth_token}}
   client.log("Low-risk request ID: " + response.body.data.createRequest.id);
 %}
 
-###
 
-### [3b] Create HIGH-risk request (Employee)
-# "Database Access" contains the HIGH-risk keyword "database" → mock
-# provider returns HIGH or CRITICAL depending on justification length.
-# ID is auto-captured into @high_risk_request_id.
-# Expected: { "data": { "createRequest": { "requiredApprovals": ["MANAGER", "IT"], ... } } }
-POST {{graphql}}
-Content-Type: application/json
-Authorization: Bearer {{auth_token}}
-
-{
-  "query": "mutation CreateRequest($applicationName: String!, $justification: String!) { createRequest(applicationName: $applicationName, justification: $justification) { id applicationName justification status requiredApprovals createdAt } }",
-  "variables": {
-    "applicationName": "Database Access",
-    "justification": "Need access."
-  }
-}
-
-> {%
-  client.global.set("high_risk_request_id", response.body.data.createRequest.id);
-  client.log("High-risk request ID: " + response.body.data.createRequest.id);
-%}
-
-###
-
-### [3c] Create MEDIUM-risk request (Employee)
-# "Jira" is a standard tech app → mock provider likely returns LOW/MEDIUM.
-# ID is auto-captured into @medium_risk_request_id.
-POST {{graphql}}
-Content-Type: application/json
-Authorization: Bearer {{auth_token}}
-
-{
-  "query": "mutation CreateRequest($applicationName: String!, $justification: String!) { createRequest(applicationName: $applicationName, justification: $justification) { id applicationName justification status requiredApprovals createdAt } }",
-  "variables": {
-    "applicationName": "Jira",
-    "justification": "Need access to run end-of-quarter expense reports and budget reconciliation."
-  }
-}
-
-> {%
-  client.global.set("medium_risk_request_id", response.body.data.createRequest.id);
-  client.log("Medium-risk request ID: " + response.body.data.createRequest.id);
-%}
-
-
-# =============================================================================
 # [4] RISK ASSESSMENT — EMPLOYEE (own request)
-# =============================================================================
 
 ### [4a] Assess LOW-risk request as Employee
 # Employee assesses their own Slack request.
-# Expected: { "data": { "riskAssessment": { "score": 8, "riskLevel": "LOW", "reasoning": "...", "metrics": { ... } } } }
+# Expected: { "data": { "assessRequestRisk": { "score": 8, "riskLevel": "LOW", "reasoning": "...", "metrics": { ... } } } }
 POST {{graphql}}
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
 {
-  "query": "query RiskAssessment($requestId: ID!) { riskAssessment(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider tokensUsed modelId } } }",
-  "variables": {
-    "requestId": "{{low_risk_request_id}}"
-  }
-}
-
-###
-
-### [4b] Assess HIGH-risk request as Employee
-# "Database Access" with short justification → CRITICAL (score ~88).
-# Expected: { "data": { "riskAssessment": { "score": 88, "riskLevel": "CRITICAL", ... } } }
-POST {{graphql}}
-Content-Type: application/json
-Authorization: Bearer {{auth_token}}
-
-{
-  "query": "query RiskAssessment($requestId: ID!) { riskAssessment(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider tokensUsed modelId } } }",
-  "variables": {
-    "requestId": "{{high_risk_request_id}}"
-  }
-}
-
-###
-
-### [4c] Assess MEDIUM-risk request as Employee
-# Expected: { "data": { "riskAssessment": { "score": 20, "riskLevel": "LOW", ... } } }
-POST {{graphql}}
-Content-Type: application/json
-Authorization: Bearer {{auth_token}}
-
-{
-  "query": "query RiskAssessment($requestId: ID!) { riskAssessment(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider tokensUsed modelId } } }",
-  "variables": {
-    "requestId": "{{medium_risk_request_id}}"
-  }
-}
-
-
-# =============================================================================
-# [5] RISK ASSESSMENT — IT APPROVER (any request)
-# =============================================================================
-
-### [5a] IT Approver assesses low-risk request
-# Expected: { "data": { "riskAssessment": { "score": 8, "riskLevel": "LOW", ... } } }
-POST {{graphql}}
-Content-Type: application/json
-Authorization: Bearer {{admin_token}}
-
-{
-  "query": "query RiskAssessment($requestId: ID!) { riskAssessment(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider tokensUsed modelId } } }",
+  "query": "mutation AssessRequestRisk($requestId: ID!) { assessRequestRisk(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider tokensUsed modelId } } }",
   "variables": {
     "requestId": "{{low_risk_request_id}}"
   }

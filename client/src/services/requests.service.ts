@@ -3,11 +3,11 @@ import {
   MY_REQUESTS_QUERY,
   ALL_REQUESTS_QUERY,
   REQUESTS_BY_STATUS_QUERY,
-  RISK_ASSESSMENT_QUERY,
 } from '../graphql/queries';
 import {
   CREATE_REQUEST_MUTATION,
   DECIDE_REQUEST_MUTATION,
+  ASSESS_REQUEST_RISK_MUTATION,
 } from '../graphql/mutations';
 import type {
   AccessRequest,
@@ -62,10 +62,10 @@ export const requestsService = {
   },
 
   async getRiskAssessment(id: string): Promise<RiskAssessmentResult> {
-    const { data } = await apolloClient.query({
-      query: RISK_ASSESSMENT_QUERY,
+    const { data } = await apolloClient.mutate({
+      mutation: ASSESS_REQUEST_RISK_MUTATION,
       variables: { requestId: id },
     });
-    return data.riskAssessment;
+    return data.assessRequestRisk;
   },
 };

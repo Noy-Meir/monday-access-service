@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { RequestHandler } from 'express';
+import { AppError } from '../utils/AppError';
 import { z } from 'zod';
 import { AccessRequest, RequestStatus, Role } from '../models/AccessRequest';
 import { Permission } from '../models/Permission';
@@ -120,6 +121,23 @@ function withValidation<TArgs>(
 }
 
 
+/**
+ * Re-throws an AppError as a GraphQLError with an appropriate extension code
+ */
+function toGraphQLError(err: unknown): never {
+  if (err instanceof AppError) {
+    const code =
+      err.statusCode === 401 ? 'UNAUTHENTICATED'
+      : err.statusCode === 403 ? 'FORBIDDEN'
+      : err.statusCode === 404 ? 'NOT_FOUND'
+      : err.statusCode === 409 ? 'CONFLICT'
+      : err.statusCode >= 500  ? 'INTERNAL_SERVER_ERROR'
+      : 'BAD_USER_INPUT';
+    throw new GraphQLError(err.message, { extensions: { code } });
+  }
+  throw err;
+}
+
 /** Converts Date fields to ISO strings for the GraphQL transport layer. */
 function serializeRequest(request: AccessRequest) {
   return {
@@ -134,6 +152,14 @@ function serializeRequest(request: AccessRequest) {
       ...a,
       approvedAt: a.approvedAt instanceof Date ? a.approvedAt.toISOString() : a.approvedAt,
     })),
+    ...(request.aiAssessment ? {
+      aiAssessment: {
+        ...request.aiAssessment,
+        assessedAt: request.aiAssessment.assessedAt instanceof Date
+          ? request.aiAssessment.assessedAt.toISOString()
+          : request.aiAssessment.assessedAt,
+      },
+    } : {}),
   };
 }
 
@@ -177,33 +203,6 @@ export const resolvers = {
       }
     ),
 
-    riskAssessment: async (
-      _: unknown,
-      { requestId }: { requestId: string },
-      ctx: GraphQLContext
-    ) => {
-      requireActor(ctx);
-
-      const request = await ctx.accessRequestService.getById(requestId);
-
-      const canViewAll = ctx.authorizationService.hasPermission(
-        ctx.actor!,
-        Permission.ACCESS_REQUEST_VIEW_ALL
-      );
-      if (!canViewAll && request.createdBy !== ctx.actor!.sub) {
-        throw new GraphQLError('Not authorized to view this request', {
-          extensions: { code: GraphQLErrorCode.FORBIDDEN },
-        });
-      }
-
-      const result = await ctx.riskAssessmentAgent.assess(request);
-      return {
-        ...result,
-        assessedAt: result.assessedAt instanceof Date
-          ? result.assessedAt.toISOString()
-          : result.assessedAt,
-      };
-    },
   },
 
   Mutation: {
@@ -212,7 +211,7 @@ export const resolvers = {
       withValidation(
         loginSchema,
         async (_: unknown, { email, password }, ctx) => {
-          return ctx.authService.login(email, password);
+          return ctx.authService.login(email, password).catch(toGraphQLError);
         }
       )
     ),
@@ -227,12 +226,40 @@ export const resolvers = {
             const request = await ctx.accessRequestService.create(
               { applicationName, justification },
               ctx.actor!
-            );
+            ).catch(toGraphQLError);
             return serializeRequest(request);
           }
         )
       )
     ),
+
+    assessRequestRisk: async (
+      _: unknown,
+      { requestId }: { requestId: string },
+      ctx: GraphQLContext
+    ) => {
+      requireActor(ctx);
+
+      const request = await ctx.accessRequestService.getById(requestId).catch(toGraphQLError);
+
+      const canViewAll = ctx.authorizationService.hasPermission(
+        ctx.actor!,
+        Permission.ACCESS_REQUEST_VIEW_ALL
+      );
+      if (!canViewAll && request.createdBy !== ctx.actor!.sub) {
+        throw new GraphQLError('Not authorized to view this request', {
+          extensions: { code: GraphQLErrorCode.FORBIDDEN },
+        });
+      }
+
+      const result = await ctx.accessRequestService.getAiRiskAssessment(requestId, ctx.actor!).catch(toGraphQLError);
+      return {
+        ...result,
+        assessedAt: result.assessedAt instanceof Date
+          ? result.assessedAt.toISOString()
+          : result.assessedAt,
+      };
+    },
 
     decideRequest: withPermission(
       Permission.ACCESS_REQUEST_DECIDE,
@@ -241,7 +268,7 @@ export const resolvers = {
         async (_, { id, decision, decisionNote }, ctx) => {
           // Pre-fetch the request so the role-boundary check can run before
           // any mutating business logic executes.
-          const request = await ctx.accessRequestService.getById(id);
+          const request = await ctx.accessRequestService.getById(id).catch(toGraphQLError);
 
           if (
             ctx.actor!.role !== Role.ADMIN &&
@@ -257,7 +284,7 @@ export const resolvers = {
             id,
             { decision: decision as RequestStatus.APPROVED | RequestStatus.DENIED, decisionNote },
             ctx.actor!
-          );
+          ).catch(toGraphQLError);
           return serializeRequest(updated);
         }
       )

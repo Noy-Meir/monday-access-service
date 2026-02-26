@@ -16,7 +16,23 @@ async function bootstrap(): Promise<void> {
   await seedData(container.userRepository, container.accessRequestRepository);
 
   // ── GraphQL / Apollo Server ─────────────────────────────────────────────
-  const apolloServer = new ApolloServer<GraphQLContext>({ typeDefs, resolvers });
+  const apolloServer = new ApolloServer<GraphQLContext>({
+    typeDefs,
+    resolvers,
+    // Add formatError to handle production masking and error cleaning
+    formatError: (formattedError) => {
+      if (process.env.NODE_ENV === 'production') {
+        return {
+          message: formattedError.message,
+          extensions: {
+            code: formattedError.extensions?.code || 'INTERNAL_SERVER_ERROR',
+          },
+        };
+      }
+      return formattedError;
+    },
+  });
+
   await apolloServer.start();
 
   // Manual Express handler — equivalent to expressMiddleware() from
@@ -35,6 +51,9 @@ async function bootstrap(): Promise<void> {
           // Invalid token — actor stays null; resolvers that need auth will throw.
         }
       }
+      // Expose actor on req so Express middleware (e.g. requestLoggerMiddleware)
+      // can read it via (req as any).user.
+      (req as any).user = actor;
 
       // ── Convert Express request headers to Apollo HeaderMap ───────────────
       const headers = new HeaderMap();
@@ -64,7 +83,6 @@ async function bootstrap(): Promise<void> {
           accessRequestService: container.accessRequestService,
           authService: container.authService,
           authorizationService: container.authorizationService,
-          riskAssessmentAgent: container.riskAssessmentAgent,
         }),
       });
 

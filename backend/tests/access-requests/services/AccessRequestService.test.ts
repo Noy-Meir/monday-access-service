@@ -16,6 +16,7 @@
  */
 import { AccessRequestService } from '../../../src/services/AccessRequestService';
 import { IAccessRequestRepository } from '../../../src/repositories/IAccessRequestRepository';
+import { IRiskAssessmentAgent } from '../../../src/modules/ai-agent/agent/IRiskAssessmentAgent';
 import { AppError } from '../../../src/utils/AppError';
 import { RequestStatus, Role } from '../../../src/models/AccessRequest';
 import {
@@ -28,6 +29,7 @@ import {
   mockDeniedRequest,
   mockMultiApprovalRequest,
   mockPartiallyApprovedRequest,
+  mockRiskAssessmentResult,
 } from '../../helpers/fixtures';
 
 // ── Module mocks ───────────────────────────────────────────────────────────────
@@ -49,14 +51,22 @@ function buildMockRepository(): jest.Mocked<IAccessRequestRepository> {
   };
 }
 
+// ── Agent mock ────────────────────────────────────────────────────────────────
+function buildMockAgent(): jest.Mocked<IRiskAssessmentAgent> {
+  return {
+    assess: jest.fn(),
+  };
+}
+
 describe('AccessRequestService', () => {
   let repository: jest.Mocked<IAccessRequestRepository>;
+  let mockAgent: jest.Mocked<IRiskAssessmentAgent>;
   let service: AccessRequestService;
 
   beforeEach(() => {
     repository = buildMockRepository();
-    // No AuthorizationService — the service has no authorization dependency.
-    service = new AccessRequestService(repository);
+    mockAgent = buildMockAgent();
+    service = new AccessRequestService(repository, mockAgent);
   });
 
   // ── create ───────────────────────────────────────────────────────────────────
@@ -476,6 +486,64 @@ describe('AccessRequestService', () => {
       repository.findById.mockResolvedValue(mockPendingRequest);
 
       await expect(service.getById(mockPendingRequest.id)).resolves.toEqual(mockPendingRequest);
+    });
+  });
+
+  // ── getAiRiskAssessment ───────────────────────────────────────────────────────
+  describe('getAiRiskAssessment', () => {
+    it('fetches request by ID and passes it to agent.assess', async () => {
+      repository.findById.mockResolvedValue(mockPendingRequest);
+      mockAgent.assess.mockResolvedValue(mockRiskAssessmentResult);
+      repository.update.mockResolvedValue({ ...mockPendingRequest, aiAssessment: mockRiskAssessmentResult });
+
+      await service.getAiRiskAssessment(mockPendingRequest.id, mockEmployeePayload);
+
+      expect(repository.findById).toHaveBeenCalledWith(mockPendingRequest.id);
+      expect(mockAgent.assess).toHaveBeenCalledWith(mockPendingRequest);
+    });
+
+    it('calls repository.update with aiAssessment populated', async () => {
+      repository.findById.mockResolvedValue(mockPendingRequest);
+      mockAgent.assess.mockResolvedValue(mockRiskAssessmentResult);
+      repository.update.mockResolvedValue({ ...mockPendingRequest, aiAssessment: mockRiskAssessmentResult });
+
+      await service.getAiRiskAssessment(mockPendingRequest.id, mockEmployeePayload);
+
+      expect(repository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ aiAssessment: mockRiskAssessmentResult })
+      );
+    });
+
+    it('returns the RiskAssessmentResult from the agent', async () => {
+      repository.findById.mockResolvedValue(mockPendingRequest);
+      mockAgent.assess.mockResolvedValue(mockRiskAssessmentResult);
+      repository.update.mockResolvedValue({ ...mockPendingRequest, aiAssessment: mockRiskAssessmentResult });
+
+      const result = await service.getAiRiskAssessment(mockPendingRequest.id, mockEmployeePayload);
+
+      expect(result).toEqual(mockRiskAssessmentResult);
+    });
+
+    it('does NOT mutate request.status', async () => {
+      repository.findById.mockResolvedValue(mockPendingRequest);
+      mockAgent.assess.mockResolvedValue(mockRiskAssessmentResult);
+      repository.update.mockResolvedValue({ ...mockPendingRequest, aiAssessment: mockRiskAssessmentResult });
+
+      await service.getAiRiskAssessment(mockPendingRequest.id, mockEmployeePayload);
+
+      expect(repository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: mockPendingRequest.status })
+      );
+    });
+
+    it('throws AppError 404 when request not found and never calls agent', async () => {
+      repository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.getAiRiskAssessment('non-existent', mockEmployeePayload)
+      ).rejects.toThrow(expect.objectContaining({ statusCode: 404 }));
+
+      expect(mockAgent.assess).not.toHaveBeenCalled();
     });
   });
 });
