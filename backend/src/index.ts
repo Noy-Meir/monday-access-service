@@ -16,7 +16,23 @@ async function bootstrap(): Promise<void> {
   await seedData(container.userRepository, container.accessRequestRepository);
 
   // ── GraphQL / Apollo Server ─────────────────────────────────────────────
-  const apolloServer = new ApolloServer<GraphQLContext>({ typeDefs, resolvers });
+  const apolloServer = new ApolloServer<GraphQLContext>({
+    typeDefs,
+    resolvers,
+    // Add formatError to handle production masking and error cleaning
+    formatError: (formattedError) => {
+      if (process.env.NODE_ENV === 'production') {
+        return {
+          message: formattedError.message,
+          extensions: {
+            code: formattedError.extensions?.code || 'INTERNAL_SERVER_ERROR',
+          },
+        };
+      }
+      return formattedError;
+    },
+  });
+
   await apolloServer.start();
 
   // Manual Express handler — equivalent to expressMiddleware() from
