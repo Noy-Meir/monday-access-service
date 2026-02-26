@@ -65,7 +65,11 @@ export function RequestList({ newRequest }: RequestListProps) {
   };
 
   const filtered =
-    activeFilter === 'ALL' ? requests : requests.filter((r) => r.status === activeFilter);
+    activeFilter === 'ALL'
+      ? requests
+      : activeFilter === RequestStatus.PENDING
+        ? requests.filter((r) => r.status === RequestStatus.PENDING || r.status === RequestStatus.PARTIALLY_APPROVED)
+        : requests.filter((r) => r.status === activeFilter);
 
   return (
     <div className="space-y-4">

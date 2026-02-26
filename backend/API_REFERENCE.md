@@ -19,7 +19,7 @@
    - [Query: myRequests](#query-myrequests)
    - [Query: allRequests](#query-allrequests)
    - [Query: requestsByStatus](#query-requestsbystatus)
-   - [Query: riskAssessment](#query-riskassessment)
+   - [Mutation: assessRequestRisk](#mutation-assessrequestrisk)
 6. [Type Reference](#6-type-reference)
 
 ---
@@ -593,9 +593,11 @@ query RequestsByStatus($status: RequestStatus!) {
 ```
 ---
 
-### Query: `riskAssessment`
+### Mutation: `assessRequestRisk`
 
-Runs an AI risk assessment on a specific access request and returns a score, risk level, and reasoning. Employees may only assess their own requests. Approver roles may assess any request.
+Triggers an AI risk assessment on a specific access request, persists the result as `aiAssessment` on the request, and returns the result. Employees may only assess their own requests. Approver roles may assess any request.
+
+This is a **Mutation** (not a Query) because it has a side effect: the result is saved to the repository and will be returned on subsequent `allRequests` / `myRequests` calls as the `aiAssessment` field. The AI output is purely advisory — it never changes `status`.
 
 **Authorization:** Any authenticated user (own requests) or approver roles (any request).
 
@@ -608,8 +610,8 @@ Runs an AI risk assessment on a specific access request and returns a score, ris
 #### GraphQL Document
 
 ```graphql
-query RiskAssessment($requestId: ID!) {
-  riskAssessment(requestId: $requestId) {
+mutation AssessRequestRisk($requestId: ID!) {
+  assessRequestRisk(requestId: $requestId) {
     requestId
     score
     riskLevel
@@ -629,7 +631,7 @@ query RiskAssessment($requestId: ID!) {
 
 ```json
 {
-  "query": "query RiskAssessment($requestId: ID!) { riskAssessment(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider tokensUsed modelId } } }",
+  "query": "mutation AssessRequestRisk($requestId: ID!) { assessRequestRisk(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider tokensUsed modelId } } }",
   "variables": {
     "requestId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
   }
@@ -641,7 +643,7 @@ query RiskAssessment($requestId: ID!) {
 ```json
 {
   "data": {
-    "riskAssessment": {
+    "assessRequestRisk": {
       "requestId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "score": 18,
       "riskLevel": "LOW",
@@ -649,9 +651,9 @@ query RiskAssessment($requestId: ID!) {
       "assessedAt": "2024-07-15T11:05:00.000Z",
       "metrics": {
         "executionTimeMs": 340,
-        "provider": "claude",
-        "tokensUsed": 187,
-        "modelId": "claude-haiku-4-5-20251001"
+        "provider": "mock",
+        "tokensUsed": null,
+        "modelId": null
       }
     }
   }
@@ -700,6 +702,7 @@ Returned by the `login` mutation.
 | `decisionByEmail` | `String` | **Yes** | Email of the final decision-maker; `null` until terminal state |
 | `decisionAt` | `String` | **Yes** | ISO 8601 timestamp of the final decision; `null` until terminal state |
 | `decisionNote` | `String` | **Yes** | Optional note left by the final decision-maker |
+| `aiAssessment` | `RiskAssessmentResult` | **Yes** | Persisted AI risk assessment; `null` until `assessRequestRisk` is called |
 
 ---
 

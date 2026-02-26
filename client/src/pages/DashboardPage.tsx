@@ -14,8 +14,6 @@ export function DashboardPage() {
   const handleCreated = (request: AccessRequest) => {
     setNewRequest(request);
     setIsFormOpen(false);
-    // Reset so future creations also trigger the effect
-    setTimeout(() => setNewRequest(null), 0);
   };
 
   return (
