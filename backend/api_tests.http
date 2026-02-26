@@ -384,6 +384,62 @@ Authorization: Bearer {{hr_token}}
 
 
 # =============================================================================
+# AI RISK ASSESSMENT
+# =============================================================================
+
+### [AI-1] Assess risk on a request as the owner (Employee)
+# Runs AI risk assessment and persists the result on the request.
+# Expected: { "data": { "assessRequestRisk": { "score": ..., "riskLevel": "LOW"|"MEDIUM"|"HIGH"|"CRITICAL", "reasoning": "..." } } }
+POST {{graphqlUrl}}
+Content-Type: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "query": "mutation AssessRequestRisk($requestId: ID!) { assessRequestRisk(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider tokensUsed modelId } } }",
+  "variables": { "requestId": "{{request_id}}" }
+}
+
+###
+
+### [AI-2] Assess risk as an approver (IT — can assess any request)
+POST {{graphqlUrl}}
+Content-Type: application/json
+Authorization: Bearer {{it_token}}
+
+{
+  "query": "mutation AssessRequestRisk($requestId: ID!) { assessRequestRisk(requestId: $requestId) { requestId score riskLevel reasoning assessedAt metrics { executionTimeMs provider } } }",
+  "variables": { "requestId": "{{request_id}}" }
+}
+
+###
+
+### [AI-3] Confirm aiAssessment is persisted — query allRequests and check aiAssessment field
+# After running AI-1 or AI-2, the result should appear under aiAssessment on the request.
+# Expected: allRequests[n].aiAssessment.score is populated
+POST {{graphqlUrl}}
+Content-Type: application/json
+Authorization: Bearer {{it_token}}
+
+{
+  "query": "query { allRequests { id applicationName status aiAssessment { score riskLevel reasoning assessedAt } } }"
+}
+
+###
+
+### [AI-4] FORBIDDEN — Employee cannot assess another user's request
+# Expected: { "errors": [{ "extensions": { "code": "FORBIDDEN" } }] }
+POST {{graphqlUrl}}
+Content-Type: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "query": "mutation AssessRequestRisk($requestId: ID!) { assessRequestRisk(requestId: $requestId) { requestId score } }",
+  "variables": { "requestId": "req-approved-002" }
+}
+
+###
+
+# =============================================================================
 # ERROR & EDGE CASES
 # =============================================================================
 
