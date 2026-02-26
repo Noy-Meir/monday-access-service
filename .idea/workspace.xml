@@ -5,11 +5,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="f1cf8edd-6146-4af3-b399-a5086233b411" name="Changes" comment="api refference">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/backend/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/backend/docker-compose.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/.next/app-build-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/client/.next/app-build-manifest.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/.next/server/app-paths-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/client/.next/server/app-paths-manifest.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/.next/server/app/(protected)/dashboard/page.js" beforeDir="false" afterPath="$PROJECT_DIR$/client/.next/server/app/(protected)/dashboard/page.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/.next/server/vendor-chunks/next.js" beforeDir="false" afterPath="$PROJECT_DIR$/client/.next/server/vendor-chunks/next.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/.next/server/webpack-runtime.js" beforeDir="false" afterPath="$PROJECT_DIR$/client/.next/server/webpack-runtime.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/.next/static/chunks/app/(protected)/dashboard/page.js" beforeDir="false" afterPath="$PROJECT_DIR$/client/.next/static/chunks/app/(protected)/dashboard/page.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/.next/static/chunks/app/layout.js" beforeDir="false" afterPath="$PROJECT_DIR$/client/.next/static/chunks/app/layout.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/.next/static/chunks/webpack.js" beforeDir="false" afterPath="$PROJECT_DIR$/client/.next/static/chunks/webpack.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/requests/RequestList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/requests/RequestList.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -318,7 +322,15 @@
       <option name="project" value="LOCAL" />
       <updated>1772106972397</updated>
     </task>
-    <option name="localTasksCounter" value="25" />
+    <task id="LOCAL-00025" summary="api refference">
+      <option name="closed" value="true" />
+      <created>1772107872609</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1772107872609</updated>
+    </task>
+    <option name="localTasksCounter" value="26" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
