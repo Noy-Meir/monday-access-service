@@ -134,6 +134,8 @@ npm test               # all unit tests (8 suites)
 npm run test:coverage  # with coverage report
 ```
 
+To test the AI integration without consuming credits, use the `MockAiProvider` (set `AI_PROVIDER=mock` in `.env`, which is the default). The `ClaudeAiProvider` includes error handling for API timeouts and invalid keys.
+
 ---
 
 ## GraphQL API
@@ -172,9 +174,9 @@ Permission-based RBAC: resolvers reference granular `Permission` values — neve
 * **Decision:** Domain errors (`AppError`) are translated to `GraphQLError` at the resolver boundary.
 * **Benefit:** Decouples internal logic from the transport layer (GraphQL). Apollo's `formatError` is configured to mask stack traces in production for security.
 
-### ADR-3: Advisory AI Integration
-* **Decision:** AI risk assessment is a **Service-layer Mutation**.
-* **Rationale:** By moving AI logic from the Resolver to the Service, results are persisted to the repository, ensuring an audit trail.
+### ADR-3: AI Risk Assessment as a Mutation
+* **Decision:** `assessRequestRisk` is exposed as a **GraphQL Mutation**, not a Query.
+* **Rationale:** The operation has a side effect — the `RiskAssessmentResult` is persisted to the repository via `AccessRequestService.getAiRiskAssessment()`, ensuring an audit trail and making the result available on subsequent reads via the `aiAssessment` field.
 * **Guardrail:** The AI output is **purely advisory**; it provides decision support (score/reasoning) but never modifies the request status automatically.
 
 ### ADR-4: Production Readiness (Non-Functional)

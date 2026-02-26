@@ -26,7 +26,6 @@ COPY --from=builder /app/dist ./dist
 RUN mkdir logs && addgroup -S appgroup && adduser -S appuser -G appgroup && chown -R appuser:appgroup /app
 
 # Run as non-root user
-# RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
 EXPOSE 3000
