@@ -122,9 +122,7 @@ function withValidation<TArgs>(
 
 
 /**
- * Re-throws an AppError as a GraphQLError with an appropriate extension code so
- * that clients receive a typed error code instead of the generic
- * INTERNAL_SERVER_ERROR that Apollo uses for unrecognised exceptions.
+ * Re-throws an AppError as a GraphQLError with an appropriate extension code
  */
 function toGraphQLError(err: unknown): never {
   if (err instanceof AppError) {
