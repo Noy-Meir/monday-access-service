@@ -35,6 +35,9 @@ async function bootstrap(): Promise<void> {
           // Invalid token — actor stays null; resolvers that need auth will throw.
         }
       }
+      // Expose actor on req so Express middleware (e.g. requestLoggerMiddleware)
+      // can read it via (req as any).user.
+      (req as any).user = actor;
 
       // ── Convert Express request headers to Apollo HeaderMap ───────────────
       const headers = new HeaderMap();

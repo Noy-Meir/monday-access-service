@@ -4,43 +4,25 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f1cf8edd-6146-4af3-b399-a5086233b411" name="Changes" comment="api reffernce">
-      <change beforePath="$PROJECT_DIR$/client/index.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/client/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/client/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/App.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ErrorBoundary.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ErrorBoundary.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/admin/DecisionModal.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/admin/DecisionModal.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/admin/RequestsTable.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/admin/RequestsTable.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/auth/PrivateRoute.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/layout/AppLayout.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/layout/AppLayout.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/layout/Navbar.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/layout/Navbar.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/requests/RequestForm.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/requests/RequestForm.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/requests/RequestList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/requests/RequestList.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Button.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Button.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Input.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Input.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Modal.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Modal.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Toast.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Toast.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/context/AuthContext.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/context/AuthContext.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/context/ToastContext.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/context/ToastContext.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/graphql/apolloClient.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/graphql/apolloClient.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/hooks/useAuth.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/hooks/useAuth.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/hooks/useToast.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/hooks/useToast.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/main.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/AdminPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/AdminPage.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/DashboardPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/DashboardPage.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/LoginPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/LoginPage.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/services/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/services/api.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/vite-env.d.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/tailwind.config.js" beforeDir="false" afterPath="$PROJECT_DIR$/client/tailwind.config.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/tsconfig.json" beforeDir="false" afterPath="$PROJECT_DIR$/client/tsconfig.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/tsconfig.node.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/vite.config.ts" beforeDir="false" />
+    <list default="true" id="f1cf8edd-6146-4af3-b399-a5086233b411" name="Changes" comment="remove comments">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/backend/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/app.ts" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/app.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/graphql/resolvers.ts" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/graphql/resolvers.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/index.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="GitHub Workflow" />
+      </list>
+    </option>
   </component>
   <component name="Git.Pull.Settings">
     <option name="OPTIONS">
@@ -52,7 +34,7 @@
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="main" />
+        <entry key="$PROJECT_DIR$" value="check-the-workflow" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -66,13 +48,18 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "Jest.Tests in tests\\.executor": "Run",
-    "git-widget-placeholder": "implement-nextjs",
+    "git-widget-placeholder": "new-fixes",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs.jest.jest_package": "C:/Users/Daniel/Desktop/Noy/monday-access-service/backend/node_modules/jest",
     "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
     "ts.external.directory.path": "C:\\Users\\Daniel\\Desktop\\Noy\\monday-access-service\\client\\node_modules\\typescript\\lib"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\Daniel\Desktop\Noy\monday-access-service\backend" />
+    </key>
+  </component>
   <component name="RunDashboard">
     <option name="configurationStatuses">
       <map>
@@ -205,7 +192,63 @@
       <option name="project" value="LOCAL" />
       <updated>1771930087572</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="implement next js">
+      <option name="closed" value="true" />
+      <created>1771932320314</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1771932320314</updated>
+    </task>
+    <task id="LOCAL-00011" summary="readme">
+      <option name="closed" value="true" />
+      <created>1771933260581</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1771933260581</updated>
+    </task>
+    <task id="LOCAL-00012" summary="unit tests">
+      <option name="closed" value="true" />
+      <created>1771933768689</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1771933768689</updated>
+    </task>
+    <task id="LOCAL-00013" summary="unit tests workflow">
+      <option name="closed" value="true" />
+      <created>1771934285164</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1771934285164</updated>
+    </task>
+    <task id="LOCAL-00014" summary="unit tests workflow">
+      <option name="closed" value="true" />
+      <created>1771934349171</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1771934349171</updated>
+    </task>
+    <task id="LOCAL-00015" summary="unit tests workflow">
+      <option name="closed" value="true" />
+      <created>1771934590325</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1771934590325</updated>
+    </task>
+    <task id="LOCAL-00016" summary="remove comments">
+      <option name="closed" value="true" />
+      <created>1772094996239</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1772094996239</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -213,6 +256,11 @@
     <MESSAGE value="update comments" />
     <MESSAGE value="remove" />
     <MESSAGE value="api reffernce" />
-    <option name="LAST_COMMIT_MESSAGE" value="api reffernce" />
+    <MESSAGE value="implement next js" />
+    <MESSAGE value="readme" />
+    <MESSAGE value="unit tests" />
+    <MESSAGE value="unit tests workflow" />
+    <MESSAGE value="remove comments" />
+    <option name="LAST_COMMIT_MESSAGE" value="remove comments" />
   </component>
 </project>

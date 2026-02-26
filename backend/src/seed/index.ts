@@ -2,14 +2,14 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { AccessRequest, RequestStatus, Role, User } from '../models/AccessRequest';
 import { IUserRepository } from '../repositories/IUserRepository';
-import { InMemoryAccessRequestRepository } from '../repositories/InMemoryAccessRequestRepository';
 import { logger } from '../utils/logger';
+import {IAccessRequestRepository} from "../repositories/IAccessRequestRepository";
 
 const SALT_ROUNDS = 10;
 
 export async function seedData(
   userRepository: IUserRepository,
-  repository: InMemoryAccessRequestRepository
+  repository: IAccessRequestRepository
 ): Promise<void> {
   logger.info('Seeding mock data...');
 
@@ -98,7 +98,7 @@ export async function seedData(
     },
   ];
 
-  repository.seedMany(requests);
+  await Promise.all(requests.map((r) => repository.save(r)));
 
   logger.info('Seed complete', { usersSeeded: users.length, requestsSeeded: requests.length });
 }

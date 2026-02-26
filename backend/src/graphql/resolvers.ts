@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { RequestHandler } from 'express';
+import { AppError } from '../utils/AppError';
 import { z } from 'zod';
 import { AccessRequest, RequestStatus, Role } from '../models/AccessRequest';
 import { Permission } from '../models/Permission';
@@ -120,6 +121,25 @@ function withValidation<TArgs>(
 }
 
 
+/**
+ * Re-throws an AppError as a GraphQLError with an appropriate extension code so
+ * that clients receive a typed error code instead of the generic
+ * INTERNAL_SERVER_ERROR that Apollo uses for unrecognised exceptions.
+ */
+function toGraphQLError(err: unknown): never {
+  if (err instanceof AppError) {
+    const code =
+      err.statusCode === 401 ? 'UNAUTHENTICATED'
+      : err.statusCode === 403 ? 'FORBIDDEN'
+      : err.statusCode === 404 ? 'NOT_FOUND'
+      : err.statusCode === 409 ? 'CONFLICT'
+      : err.statusCode >= 500  ? 'INTERNAL_SERVER_ERROR'
+      : 'BAD_USER_INPUT';
+    throw new GraphQLError(err.message, { extensions: { code } });
+  }
+  throw err;
+}
+
 /** Converts Date fields to ISO strings for the GraphQL transport layer. */
 function serializeRequest(request: AccessRequest) {
   return {
@@ -184,7 +204,7 @@ export const resolvers = {
     ) => {
       requireActor(ctx);
 
-      const request = await ctx.accessRequestService.getById(requestId);
+      const request = await ctx.accessRequestService.getById(requestId).catch(toGraphQLError);
 
       const canViewAll = ctx.authorizationService.hasPermission(
         ctx.actor!,
@@ -196,7 +216,7 @@ export const resolvers = {
         });
       }
 
-      const result = await ctx.riskAssessmentAgent.assess(request);
+      const result = await ctx.riskAssessmentAgent.assess(request).catch(toGraphQLError);
       return {
         ...result,
         assessedAt: result.assessedAt instanceof Date
@@ -212,7 +232,7 @@ export const resolvers = {
       withValidation(
         loginSchema,
         async (_: unknown, { email, password }, ctx) => {
-          return ctx.authService.login(email, password);
+          return ctx.authService.login(email, password).catch(toGraphQLError);
         }
       )
     ),
@@ -227,7 +247,7 @@ export const resolvers = {
             const request = await ctx.accessRequestService.create(
               { applicationName, justification },
               ctx.actor!
-            );
+            ).catch(toGraphQLError);
             return serializeRequest(request);
           }
         )
@@ -241,7 +261,7 @@ export const resolvers = {
         async (_, { id, decision, decisionNote }, ctx) => {
           // Pre-fetch the request so the role-boundary check can run before
           // any mutating business logic executes.
-          const request = await ctx.accessRequestService.getById(id);
+          const request = await ctx.accessRequestService.getById(id).catch(toGraphQLError);
 
           if (
             ctx.actor!.role !== Role.ADMIN &&
@@ -257,7 +277,7 @@ export const resolvers = {
             id,
             { decision: decision as RequestStatus.APPROVED | RequestStatus.DENIED, decisionNote },
             ctx.actor!
-          );
+          ).catch(toGraphQLError);
           return serializeRequest(updated);
         }
       )
